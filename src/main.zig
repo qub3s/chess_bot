@@ -5,6 +5,8 @@ const ray = @cImport({
 const print = std.debug.print;
 const mem = @import("std").mem;
 
+
+
 // board colors
 const black_color: u32 = 0xf0d9b5ff;
 const white_color: u32 = 0xb58863ff;

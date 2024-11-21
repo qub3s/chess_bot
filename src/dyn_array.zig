@@ -1,7 +1,7 @@
 const std = @import("std");
 const print = std.debug.print;
 
-fn vector_d(comptime T: type) type {
+fn Vector(comptime T: type) type {
     return struct {
         const Self = @This();
         const type_ = T;
@@ -47,7 +47,7 @@ pub fn main() !void {
     var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_allocator.allocator();
 
-    const d = try vector_d(f32).init(gpa, 1000);
+    const d = try Vector(f32).init(gpa, 1000);
 
     print("{}\n", .{d.size});
     print("{}\n", .{d.alloc_size});
