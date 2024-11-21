@@ -11,6 +11,8 @@ const white_color: u32 = 0xb58863ff;
 
 // piece_graphices
 var textures_pieces: [12]ray.Texture = undefined;
+const tile_pos = struct { x: u8, y: u8 };
+const move = struct { x1: u8, y1: u8, x2: u8, y2: u8 };
 
 // empty = 0, wking = 1, wqueen = 2, wrook = 3, wbishop = 4, wknight = 5, wpawn = 6, bking = 7 ...
 const Board_s = struct {
@@ -71,7 +73,14 @@ fn load_piece_textures() !void {
     }
 }
 
-fn draw_board(size: i32, board: Board_s) void {
+// create list of all possible moves
+fn possible_moves(board: Board_s) !void {
+    for (0..board.piece_pos.len) |n| {
+        print("{}", .{board.piece_pos[n]});
+    }
+}
+
+fn draw_board(size: i32, board: Board_s, tiles: [64]u8) void {
     const white_board_tile_color = ray.GetColor(white_color);
     const black_board_tile_color = ray.GetColor(black_color);
 
@@ -83,7 +92,9 @@ fn draw_board(size: i32, board: Board_s) void {
             const xmin = size * x;
             const ymin = size * y;
 
-            if (@mod(x + y, 2) == 0) {
+            if (tiles[@intCast(x + y * 8)] == 1) {
+                ray.DrawRectangle(xmin, ymin, size, size, ray.SKYBLUE);
+            } else if (@mod(x + y, 2) == 0) {
                 ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
             } else {
                 ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
@@ -100,13 +111,13 @@ fn draw_board(size: i32, board: Board_s) void {
 pub fn main() !void {
     const screenWidth = 1000;
     const screenHeight = 1000;
+    const tile_size = 70;
 
     // declare allocator
-    //var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    //const gpa = general_purpose_allocator.allocator();
+    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = general_purpose_allocator.allocator();
 
-    const board = Board_s.init();
-    //board = board.nothing();
+    var board = Board_s.init();
 
     ray.InitWindow(screenWidth, screenHeight, "");
     defer ray.CloseWindow();
@@ -115,11 +126,52 @@ pub fn main() !void {
 
     try load_piece_textures();
 
+    var tiles = mem.zeroes([64]u8);
+    var last_pos = tile_pos{ .x = 255, .y = 255 };
+    var empty_click = true;
+
     while (!ray.WindowShouldClose()) {
+        if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT) or ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_RIGHT)) {
+            // reset board
+            tiles = mem.zeroes([64]u8);
+
+            const mouse_pos = ray.GetMousePosition();
+            var x: u32 = 0;
+            var y: u32 = 0;
+
+            try possible_moves(board);
+
+            while (x < 8) : (x += 1) {
+                y = 0;
+                while (y < 8) : (y += 1) {
+                    const xmin: f32 = @floatFromInt(tile_size * x);
+                    const ymin: f32 = @floatFromInt(tile_size * y);
+
+                    if (xmin < mouse_pos.x and xmin + tile_size > mouse_pos.x and ymin < mouse_pos.y and ymin + tile_size > mouse_pos.y) {
+                        const p1 = board.get(x, y);
+
+                        if (!empty_click) {
+                            const p2 = board.get(last_pos.x, last_pos.y);
+
+                            board.set(x, y, p2);
+                            board.set(last_pos.x, last_pos.y, 0);
+                            empty_click = true;
+                        } else {
+                            empty_click = (p1 == 0);
+                        }
+                        tiles[x + 8 * y] = 1;
+                        last_pos.x = @intCast(x);
+                        last_pos.y = @intCast(y);
+                    }
+                }
+            }
+        }
+
+        // start drawing
         ray.BeginDrawing();
         defer ray.EndDrawing();
 
         ray.ClearBackground(ray.RAYWHITE);
-        draw_board(70, board);
+        draw_board(tile_size, board, tiles);
     }
 }
