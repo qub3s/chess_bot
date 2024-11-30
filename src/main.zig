@@ -5,7 +5,8 @@ const ray = @cImport({
 const print = std.debug.print;
 const mem = @import("std").mem;
 
-
+var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+const gpa = general_purpose_allocator.allocator();
 
 // board colors
 const black_color: u32 = 0xf0d9b5ff;
@@ -13,29 +14,29 @@ const white_color: u32 = 0xb58863ff;
 
 // piece_graphices
 var textures_pieces: [12]ray.Texture = undefined;
-const tile_pos = struct { x: u8, y: u8 };
-const move = struct { x1: u8, y1: u8, x2: u8, y2: u8 };
+const tile_pos = struct { x: i32, y: i32 };
+const move = struct { x1: i32, y1: i32, x2: i32, y2: i32 };
 
 // empty = 0, wking = 1, wqueen = 2, wrook = 3, wbishop = 4, wknight = 5, wpawn = 6, bking = 7 ...
 const Board_s = struct {
     white_castled: bool,
     black_castled: bool,
-    piece_pos: [64]u8,
+    pieces: [64]i32,
 
     pub fn nothing(self: Board_s) Board_s {
         return self;
     }
 
-    pub fn set(self: *Board_s, x: u32, y: u32, value: u8) void {
-        self.piece_pos[y * 8 + x] = value;
+    pub fn set(self: *Board_s, x: i32, y: i32, value: i32) void {
+        self.pieces[@intCast(y * 8 + x)] = value;
     }
 
-    pub fn get(self: *const Board_s, x: u32, y: u32) u8 {
-        return self.piece_pos[y * 8 + x];
+    pub fn get(self: *const Board_s, x: i32, y: i32) i32 {
+        return self.pieces[@intCast(y * 8 + x)];
     }
 
     pub fn init() Board_s {
-        var self = Board_s{ .white_castled = false, .black_castled = false, .piece_pos = mem.zeroes([64]u8) };
+        var self = Board_s{ .white_castled = false, .black_castled = false, .pieces = mem.zeroes([64]i32) };
 
         // white pieces
         self.set(0, 0, 3);
@@ -75,14 +76,91 @@ fn load_piece_textures() !void {
     }
 }
 
-// create list of all possible moves
-fn possible_moves(board: Board_s) !void {
-    for (0..board.piece_pos.len) |n| {
-        print("{}", .{board.piece_pos[n]});
+inline fn valid_move(board: Board_s, x: i32, y: i32, white: bool) bool {
+    if (x >= 8 or x < 0 or y >= 8 or y < 0) {
+        return false;
+    }
+
+    const piece = board.pieces[@intCast(y * 8 + x)];
+
+    if (piece == 0) {
+        return true;
+    }
+
+    if (white) {
+        if (piece > 6 and piece < 12) {
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        if (piece > 0 and piece < 7) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
-fn draw_board(size: i32, board: Board_s, tiles: [64]u8) void {
+// create list of all possible moves
+// TODO add castling
+fn possible_moves(board: Board_s) !void {
+    var list = std.ArrayList(move).init(gpa);
+
+    for (0..64) |i| {
+        if (board.pieces[i] != 0) {
+            const x: i32 = @intCast(i % 8);
+            const y: i32 = @intCast(i / 8);
+            const white = board.pieces[i] < 7;
+
+            // king moves
+            if (board.pieces[i] == 1 or board.pieces[i] == 7) {
+                const x_change = [_]i32{ 1, -1, 0, 0, 1, 0, -1, 0 };
+                const y_change = [_]i32{ 0, 0, 1, -1, 0, 1, 0, -1 };
+
+                for (x_change, y_change) |xc, yc| {
+                    if (valid_move(board, x + xc, y + yc, white)) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x + xc, .y2 = y + yc });
+                    }
+                }
+            }
+
+            // add queen moves
+            else if (board.pieces[i] == 2 or board.pieces[i] == 8) {
+                const x_change = [_]i32{ 1, -1, 0, 0, 1, 0, -1, 0 };
+                const y_change = [_]i32{ 0, 0, 1, -1, 0, 1, 0, -1 };
+
+                for (x_change, y_change) |xc, yc| {
+                    var x2 = x + xc;
+                    var y2 = y + yc;
+
+                    while (valid_move(board, x2, y2, white)) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 });
+                        x2 = x2 + xc;
+                        y2 = y2 + yc;
+                    }
+                }
+            }
+
+            // add rook moves
+            else if (board.pieces[i] == 3 or board.pieces[i] == 9) {}
+            // add bishop moves
+            else if (board.pieces[i] == 4 or board.pieces[i] == 10) {}
+            // add knight moves
+            else if (board.pieces[i] == 5 or board.pieces[i] == 11) {}
+            // add pawn white moves
+            else if (board.pieces[i] == 6) {}
+            // add pawn black moves
+            else if (board.pieces[i] == 12) {}
+        }
+    }
+    print("{}\n", .{list.items.len});
+    for (0..list.items.len) |i| {
+        const x = list.items[i];
+        print("{},{} - {},{} | ", .{ x.x1, x.y1, x.x2, x.y2 });
+    }
+}
+fn draw_board(size: i32, board: Board_s, tiles: [64]i32) void {
     const white_board_tile_color = ray.GetColor(white_color);
     const black_board_tile_color = ray.GetColor(black_color);
 
@@ -91,8 +169,8 @@ fn draw_board(size: i32, board: Board_s, tiles: [64]u8) void {
     while (x < 8) : (x += 1) {
         y = 0;
         while (y < 8) : (y += 1) {
-            const xmin = size * x;
-            const ymin = size * y;
+            const xmin = size * (7 - x);
+            const ymin = size * (7 - y);
 
             if (tiles[@intCast(x + y * 8)] == 1) {
                 ray.DrawRectangle(xmin, ymin, size, size, ray.SKYBLUE);
@@ -104,11 +182,15 @@ fn draw_board(size: i32, board: Board_s, tiles: [64]u8) void {
 
             const field_value = board.get(@intCast(x), @intCast(y));
             if (field_value != 0) {
-                ray.DrawTextureEx(textures_pieces[field_value - 1], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, 0.15, ray.WHITE);
+                ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, 0.15, ray.WHITE);
             }
         }
     }
 }
+
+// TODO write view
+// field 0|0 is bottom left
+fn visualize(){}
 
 pub fn main() !void {
     const screenWidth = 1000;
@@ -116,11 +198,7 @@ pub fn main() !void {
     const tile_size = 70;
 
     // declare allocator
-    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = general_purpose_allocator.allocator();
-
     var board = Board_s.init();
-
     ray.InitWindow(screenWidth, screenHeight, "");
     defer ray.CloseWindow();
 
@@ -128,18 +206,18 @@ pub fn main() !void {
 
     try load_piece_textures();
 
-    var tiles = mem.zeroes([64]u8);
+    var tiles = mem.zeroes([64]i32);
     var last_pos = tile_pos{ .x = 255, .y = 255 };
     var empty_click = true;
 
     while (!ray.WindowShouldClose()) {
         if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT) or ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_RIGHT)) {
             // reset board
-            tiles = mem.zeroes([64]u8);
+            tiles = mem.zeroes([64]i32);
 
             const mouse_pos = ray.GetMousePosition();
-            var x: u32 = 0;
-            var y: u32 = 0;
+            var x: i32 = 0;
+            var y: i32 = 0;
 
             try possible_moves(board);
 
@@ -161,7 +239,8 @@ pub fn main() !void {
                         } else {
                             empty_click = (p1 == 0);
                         }
-                        tiles[x + 8 * y] = 1;
+                        print("tile: {} {}", .{ x, y });
+                        tiles[@intCast(x + 8 * y)] = 1;
                         last_pos.x = @intCast(x);
                         last_pos.y = @intCast(y);
                     }
