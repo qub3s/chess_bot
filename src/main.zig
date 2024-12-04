@@ -160,10 +160,41 @@ fn possible_moves(board: Board_s) !void {
         print("{},{} - {},{} | ", .{ x.x1, x.y1, x.x2, x.y2 });
     }
 }
-fn draw_board(size: i32, board: Board_s, tiles: [64]i32) void {
+
+// TODO write view
+// field 0|0 is bottom left
+// get position -> calc possible moves -> draw tiles
+fn visualize(board: *Board_s, size: i32) !void {
     const white_board_tile_color = ray.GetColor(white_color);
     const black_board_tile_color = ray.GetColor(black_color);
 
+    var click_pos: i32 = -1;
+    const last_click_pos = struct {
+        var v: i32 = -1;
+    };
+
+    if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT) or ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_RIGHT)) {
+        const mouse_pos = ray.GetMousePosition();
+        if (!(@as(i32, @intFromFloat(mouse_pos.x)) > 8 * size) and !(@as(i32, @intFromFloat(mouse_pos.y)) > 8 * size)) {
+            click_pos = 63 - @divTrunc(@as(i32, @intFromFloat(mouse_pos.x)), size) - @divTrunc(@as(i32, @intFromFloat(mouse_pos.y)), size) * 8;
+        }
+    }
+
+    //try possible_moves(board);
+
+    // swap board pieces
+    if (last_click_pos.v != -1 and click_pos != -1) {
+        board.pieces[@intCast(click_pos)] = board.pieces[@intCast(last_click_pos.v)];
+        board.pieces[@intCast(last_click_pos.v)] = 0;
+        last_click_pos.v = -1;
+        click_pos = -1;
+    }
+
+    if (click_pos != -1) {
+        last_click_pos.v = click_pos;
+    }
+
+    // draw pieces and fields
     var x: i32 = 0;
     var y: i32 = 0;
     while (x < 8) : (x += 1) {
@@ -172,7 +203,7 @@ fn draw_board(size: i32, board: Board_s, tiles: [64]i32) void {
             const xmin = size * (7 - x);
             const ymin = size * (7 - y);
 
-            if (tiles[@intCast(x + y * 8)] == 1) {
+            if (last_click_pos.v == y * 8 + x) {
                 ray.DrawRectangle(xmin, ymin, size, size, ray.SKYBLUE);
             } else if (@mod(x + y, 2) == 0) {
                 ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
@@ -182,23 +213,20 @@ fn draw_board(size: i32, board: Board_s, tiles: [64]i32) void {
 
             const field_value = board.get(@intCast(x), @intCast(y));
             if (field_value != 0) {
-                ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, 0.15, ray.WHITE);
+                ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
             }
         }
     }
 }
 
-// TODO write view
-// field 0|0 is bottom left
-fn visualize(){}
-
 pub fn main() !void {
     const screenWidth = 1000;
     const screenHeight = 1000;
-    const tile_size = 70;
+    const tile_size = 125;
 
     // declare allocator
     var board = Board_s.init();
+    board.white_castled = true;
     ray.InitWindow(screenWidth, screenHeight, "");
     defer ray.CloseWindow();
 
@@ -206,53 +234,11 @@ pub fn main() !void {
 
     try load_piece_textures();
 
-    var tiles = mem.zeroes([64]i32);
-    var last_pos = tile_pos{ .x = 255, .y = 255 };
-    var empty_click = true;
-
     while (!ray.WindowShouldClose()) {
-        if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT) or ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_RIGHT)) {
-            // reset board
-            tiles = mem.zeroes([64]i32);
-
-            const mouse_pos = ray.GetMousePosition();
-            var x: i32 = 0;
-            var y: i32 = 0;
-
-            try possible_moves(board);
-
-            while (x < 8) : (x += 1) {
-                y = 0;
-                while (y < 8) : (y += 1) {
-                    const xmin: f32 = @floatFromInt(tile_size * x);
-                    const ymin: f32 = @floatFromInt(tile_size * y);
-
-                    if (xmin < mouse_pos.x and xmin + tile_size > mouse_pos.x and ymin < mouse_pos.y and ymin + tile_size > mouse_pos.y) {
-                        const p1 = board.get(x, y);
-
-                        if (!empty_click) {
-                            const p2 = board.get(last_pos.x, last_pos.y);
-
-                            board.set(x, y, p2);
-                            board.set(last_pos.x, last_pos.y, 0);
-                            empty_click = true;
-                        } else {
-                            empty_click = (p1 == 0);
-                        }
-                        print("tile: {} {}", .{ x, y });
-                        tiles[@intCast(x + 8 * y)] = 1;
-                        last_pos.x = @intCast(x);
-                        last_pos.y = @intCast(y);
-                    }
-                }
-            }
-        }
-
-        // start drawing
         ray.BeginDrawing();
         defer ray.EndDrawing();
 
         ray.ClearBackground(ray.RAYWHITE);
-        draw_board(tile_size, board, tiles);
+        try visualize(&board, tile_size);
     }
 }
