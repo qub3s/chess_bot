@@ -68,7 +68,6 @@ const Board_s = struct {
 };
 
 fn load_piece_textures() !void {
-    //const piece_path = "";
     const names: [12][]const u8 = .{ "../images/pieces/kl.png", "../images/pieces/ql.png", "../images/pieces/rl.png", "../images/pieces/bl.png", "../images/pieces/nl.png", "../images/pieces/pl.png", "../images/pieces/kd.png", "../images/pieces/qd.png", "../images/pieces/rd.png", "../images/pieces/bd.png", "../images/pieces/nd.png", "../images/pieces/pd.png" };
 
     for (0..names.len) |x| {
@@ -76,19 +75,21 @@ fn load_piece_textures() !void {
     }
 }
 
-inline fn valid_move(board: Board_s, x: i32, y: i32, white: bool) bool {
+inline fn valid_move(board: *Board_s, x: i32, y: i32, white: bool) bool {
+    // check if in bounds
     if (x >= 8 or x < 0 or y >= 8 or y < 0) {
         return false;
     }
 
     const piece = board.pieces[@intCast(y * 8 + x)];
 
+    // check if empty
     if (piece == 0) {
         return true;
     }
 
     if (white) {
-        if (piece > 6 and piece < 12) {
+        if (piece > 6 and piece < 13) {
             return true;
         } else {
             return false;
@@ -103,10 +104,11 @@ inline fn valid_move(board: Board_s, x: i32, y: i32, white: bool) bool {
 }
 
 // create list of all possible moves
-// TODO add castling
-fn possible_moves(board: Board_s) !void {
-    var list = std.ArrayList(move).init(gpa);
-
+// TODO
+// add castling
+// add en pason
+// add promoting (other than queen)
+fn possible_moves(board: *Board_s, list: *std.ArrayList(move)) !void {
     for (0..64) |i| {
         if (board.pieces[i] != 0) {
             const x: i32 = @intCast(i % 8);
@@ -115,8 +117,8 @@ fn possible_moves(board: Board_s) !void {
 
             // king moves
             if (board.pieces[i] == 1 or board.pieces[i] == 7) {
-                const x_change = [_]i32{ 1, -1, 0, 0, 1, 0, -1, 0 };
-                const y_change = [_]i32{ 0, 0, 1, -1, 0, 1, 0, -1 };
+                const x_change = [_]i32{ 1, -1, 0, 0, 1, 1, -1, -1 };
+                const y_change = [_]i32{ 0, 0, 1, -1, 1, -1, -1, 1 };
 
                 for (x_change, y_change) |xc, yc| {
                     if (valid_move(board, x + xc, y + yc, white)) {
@@ -127,8 +129,8 @@ fn possible_moves(board: Board_s) !void {
 
             // add queen moves
             else if (board.pieces[i] == 2 or board.pieces[i] == 8) {
-                const x_change = [_]i32{ 1, -1, 0, 0, 1, 0, -1, 0 };
-                const y_change = [_]i32{ 0, 0, 1, -1, 0, 1, 0, -1 };
+                const x_change = [_]i32{ 1, -1, 0, 0, 1, 1, -1, -1 };
+                const y_change = [_]i32{ 0, 0, 1, -1, 1, -1, -1, 1 };
 
                 for (x_change, y_change) |xc, yc| {
                     var x2 = x + xc;
@@ -136,6 +138,10 @@ fn possible_moves(board: Board_s) !void {
 
                     while (valid_move(board, x2, y2, white)) {
                         try list.append(move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 });
+
+                        if (board.pieces[@intCast(x2 + y2 * 8)] != 0) {
+                            break;
+                        }
                         x2 = x2 + xc;
                         y2 = y2 + yc;
                     }
@@ -143,27 +149,129 @@ fn possible_moves(board: Board_s) !void {
             }
 
             // add rook moves
-            else if (board.pieces[i] == 3 or board.pieces[i] == 9) {}
+            else if (board.pieces[i] == 3 or board.pieces[i] == 9) {
+                const x_change = [_]i32{ 1, -1, 0, 0 };
+                const y_change = [_]i32{ 0, 0, 1, -1 };
+
+                for (x_change, y_change) |xc, yc| {
+                    var x2 = x + xc;
+                    var y2 = y + yc;
+
+                    while (valid_move(board, x2, y2, white)) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 });
+
+                        if (board.pieces[@intCast(x2 + y2 * 8)] != 0) {
+                            break;
+                        }
+                        x2 = x2 + xc;
+                        y2 = y2 + yc;
+                    }
+                }
+            }
             // add bishop moves
-            else if (board.pieces[i] == 4 or board.pieces[i] == 10) {}
+            else if (board.pieces[i] == 4 or board.pieces[i] == 10) {
+                const x_change = [_]i32{ 1, 1, -1, -1 };
+                const y_change = [_]i32{ 1, -1, 1, -1 };
+
+                for (x_change, y_change) |xc, yc| {
+                    var x2 = x + xc;
+                    var y2 = y + yc;
+
+                    while (valid_move(board, x2, y2, white)) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 });
+
+                        if (board.pieces[@intCast(x2 + y2 * 8)] != 0) {
+                            break;
+                        }
+                        x2 = x2 + xc;
+                        y2 = y2 + yc;
+                    }
+                }
+            }
             // add knight moves
-            else if (board.pieces[i] == 5 or board.pieces[i] == 11) {}
+            else if (board.pieces[i] == 5 or board.pieces[i] == 11) {
+                const x_change = [_]i32{ 2, 2, -2, -2, 1, 1, -1, -1 };
+                const y_change = [_]i32{ 1, -1, 1, -1, 2, -2, 2, -2 };
+
+                for (x_change, y_change) |xc, yc| {
+                    const x2 = x + xc;
+                    const y2 = y + yc;
+
+                    if (valid_move(board, x2, y2, white)) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 });
+                    }
+                }
+            }
             // add pawn white moves
-            else if (board.pieces[i] == 6) {}
+            else if (board.pieces[i] == 6) {
+                if (y == 7) {
+                    board.pieces[i] = 2;
+                } else {
+                    const capr = board.pieces[@intCast(x - 1 + (y + 1) * 8)];
+                    const capl = board.pieces[@intCast(x + 1 + (y + 1) * 8)];
+                    const push = board.pieces[@intCast(x + (y + 1) * 8)];
+
+                    // capture left
+                    if (capr > 6) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x - 1, .y2 = y + 1 });
+                    }
+
+                    // capture right
+                    if (capl > 6) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x + 1, .y2 = y + 1 });
+                    }
+
+                    // push
+                    if (valid_move(board, x, y + 1, white) and push == 0) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x, .y2 = y + 1 });
+                    }
+
+                    // double push
+                    if (y == 1) {
+                        const fpush = board.pieces[@intCast(x + (y + 2) * 8)];
+                        if (valid_move(board, x, y + 2, white) and fpush == 0) {
+                            try list.append(move{ .x1 = x, .y1 = y, .x2 = x, .y2 = y + 2 });
+                        }
+                    }
+                }
+            }
             // add pawn black moves
-            else if (board.pieces[i] == 12) {}
+            else if (board.pieces[i] == 12) {
+                if (y == 0) {
+                    board.pieces[i] = 8;
+                } else {
+                    const capr = board.pieces[@intCast(x - 1 + (y - 1) * 8)];
+                    const capl = board.pieces[@intCast(x + 1 + (y - 1) * 8)];
+                    const push = board.pieces[@intCast(x + (y - 1) * 8)];
+
+                    // capture left
+                    if (capr < 7 and capr != 0) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x - 1, .y2 = y - 1 });
+                    }
+
+                    // capture right
+                    if (capl < 7 and capr != 0) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x + 1, .y2 = y - 1 });
+                    }
+
+                    // push
+                    if (valid_move(board, x, y - 1, white) and push == 0) {
+                        try list.append(move{ .x1 = x, .y1 = y, .x2 = x, .y2 = y - 1 });
+                    }
+
+                    // double push
+                    if (y == 6) {
+                        const fpush = board.pieces[@intCast(x + (y - 2) * 8)];
+                        if (valid_move(board, x, y - 2, white) and fpush == 0) {
+                            try list.append(move{ .x1 = x, .y1 = y, .x2 = x, .y2 = y - 2 });
+                        }
+                    }
+                }
+            }
         }
-    }
-    print("{}\n", .{list.items.len});
-    for (0..list.items.len) |i| {
-        const x = list.items[i];
-        print("{},{} - {},{} | ", .{ x.x1, x.y1, x.x2, x.y2 });
     }
 }
 
-// TODO write view
-// field 0|0 is bottom left
-// get position -> calc possible moves -> draw tiles
 fn visualize(board: *Board_s, size: i32) !void {
     const white_board_tile_color = ray.GetColor(white_color);
     const black_board_tile_color = ray.GetColor(black_color);
@@ -173,6 +281,10 @@ fn visualize(board: *Board_s, size: i32) !void {
         var v: i32 = -1;
     };
 
+    const first_draw = struct {
+        var v: bool = true;
+    };
+
     if (ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_LEFT) or ray.IsMouseButtonPressed(ray.MOUSE_BUTTON_RIGHT)) {
         const mouse_pos = ray.GetMousePosition();
         if (!(@as(i32, @intFromFloat(mouse_pos.x)) > 8 * size) and !(@as(i32, @intFromFloat(mouse_pos.y)) > 8 * size)) {
@@ -180,40 +292,86 @@ fn visualize(board: *Board_s, size: i32) !void {
         }
     }
 
-    //try possible_moves(board);
+    if (click_pos != -1 or first_draw.v) {
+        ray.ClearBackground(ray.RAYWHITE);
+        first_draw.v = false;
 
-    // swap board pieces
-    if (last_click_pos.v != -1 and click_pos != -1) {
-        board.pieces[@intCast(click_pos)] = board.pieces[@intCast(last_click_pos.v)];
-        board.pieces[@intCast(last_click_pos.v)] = 0;
-        last_click_pos.v = -1;
-        click_pos = -1;
-    }
+        // get moves
+        var all_moves = std.ArrayList(move).init(gpa);
+        var visible_moves = std.ArrayList(i32).init(gpa);
+        try possible_moves(board, &all_moves);
 
-    if (click_pos != -1) {
-        last_click_pos.v = click_pos;
-    }
-
-    // draw pieces and fields
-    var x: i32 = 0;
-    var y: i32 = 0;
-    while (x < 8) : (x += 1) {
-        y = 0;
-        while (y < 8) : (y += 1) {
-            const xmin = size * (7 - x);
-            const ymin = size * (7 - y);
-
-            if (last_click_pos.v == y * 8 + x) {
-                ray.DrawRectangle(xmin, ymin, size, size, ray.SKYBLUE);
-            } else if (@mod(x + y, 2) == 0) {
-                ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
-            } else {
-                ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
+        // check if move is valid
+        if (last_click_pos.v != -1) {
+            var temp: i32 = -1;
+            for (0..all_moves.items.len) |i| {
+                if (all_moves.items[i].x1 + all_moves.items[i].y1 * 8 == last_click_pos.v and all_moves.items[i].x2 + all_moves.items[i].y2 * 8 == click_pos) {
+                    temp = click_pos;
+                    break;
+                }
             }
 
-            const field_value = board.get(@intCast(x), @intCast(y));
-            if (field_value != 0) {
-                ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
+            if (temp == -1) {
+                last_click_pos.v = click_pos;
+                click_pos = temp;
+            }
+            // swap board pieces
+            if (click_pos != -1) {
+                board.pieces[@intCast(click_pos)] = board.pieces[@intCast(last_click_pos.v)];
+                board.pieces[@intCast(last_click_pos.v)] = 0;
+                last_click_pos.v = -1;
+                click_pos = -1;
+            }
+        }
+
+        // carry over the last move
+        if (click_pos != -1) {
+            last_click_pos.v = click_pos;
+        }
+
+        // collect moves of selected piece
+        for (0..all_moves.items.len) |i| {
+            if (last_click_pos.v == all_moves.items[i].x1 + all_moves.items[i].y1 * 8) {
+                try visible_moves.append(all_moves.items[i].x2 + all_moves.items[i].y2 * 8);
+            }
+        }
+
+        // draw pieces and fields
+        var x: i32 = 0;
+        var y: i32 = 0;
+        while (x < 8) : (x += 1) {
+            y = 0;
+            while (y < 8) : (y += 1) {
+                const xmin = size * (7 - x);
+                const ymin = size * (7 - y);
+
+                if (last_click_pos.v == y * 8 + x) {
+                    ray.DrawRectangle(xmin, ymin, size, size, ray.DARKBLUE);
+                } else if (@mod(x + y, 2) == 0) {
+                    ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
+                } else {
+                    ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
+                }
+
+                const field_value = board.get(@intCast(x), @intCast(y));
+                if (field_value != 0) {
+                    ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
+                }
+            }
+        }
+
+        x = 0;
+        while (x < 8) : (x += 1) {
+            y = 0;
+            while (y < 8) : (y += 1) {
+                const xmin = size * (7 - x);
+                const ymin = size * (7 - y);
+
+                for (0..visible_moves.items.len) |i| {
+                    if (visible_moves.items[i] == y * 8 + x) {
+                        ray.DrawCircle(xmin + @divTrunc(size, 2), ymin + @divTrunc(size, 2), @floatFromInt(@divTrunc(size, 6)), ray.DARKBLUE);
+                    }
+                }
             }
         }
     }
@@ -238,7 +396,6 @@ pub fn main() !void {
         ray.BeginDrawing();
         defer ray.EndDrawing();
 
-        ray.ClearBackground(ray.RAYWHITE);
         try visualize(&board, tile_size);
     }
 }
