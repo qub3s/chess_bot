@@ -206,6 +206,14 @@ def nth(i, x):
 def count(i):
     return sum(1 for e in i)
 
+def isover(board):
+    if board.is_insufficient_material() or board.is_checkmate() or board.is_stalemate() or board.is_fifty_moves():
+        return True
+    else: 
+        return False
+
+    
+
 def make_x_random_moves(n,board):
     b = board.copy()
 
@@ -238,9 +246,9 @@ def check_move(model, board, whitetomove, device, lvl):
     
     idx = 0
     if whitetomove:
-        idx = moves.index(max(moves))
-    else:
         idx = moves.index(min(moves))
+    else:
+        idx = moves.index(max(moves))
 
     return idx
 
@@ -263,8 +271,6 @@ def play_game(model):
             board.push_san(lm[move])
         else:
             board.push_san( lm[random.randint(0,len(lm)-1)] )
-            
-            # safe the config
             moves.append( to_numpy(board) )
         
         whitetomove = whitetomove == False
@@ -288,6 +294,11 @@ def play_game(model):
 # train the first network on the results of games -> train another network base on the predictions of this network
 # extract 2 boards, one 3 moves before the end and one 8 moves before the end
 
+seed = 22
+torch.manual_seed(seed)
+random.seed(seed)
+np.random.seed(seed)
+
 last_x_moves = 1
 sd = "1/2-1/2"
 sl = "0-1"
@@ -297,9 +308,12 @@ positions = []
 Y = []
 
 device = "cuda"
+model_path = "self_play.pth"
 
 # create model
 model = result_prediction()
+model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(device)))
+
 model.to(device)
 
 X = []
@@ -307,8 +321,7 @@ y = []
 
 epochs = 3
 lr = 0.001
-batch_size = 100
-model_path = "self_play.pth"
+batch_size = 1000
 
 loss_function = torch.nn.MSELoss()
 epochs = 10
@@ -343,11 +356,12 @@ while True:
         y = []
         X = []
 
-        out = cv2.VideoWriter(str(cnt)+'.mp4', cv2.VideoWriter_fourcc(*'mp4v') , 15, (390,390))
+        out = cv2.VideoWriter("videos/"+str(cnt)+'.mp4', cv2.VideoWriter_fourcc(*'mp4v') , 15, (390,390))
  
         board = chess.Board()
         whitetomove = True
         counter = 0
+        # make video
         while not board.is_checkmate() or not board.is_stalemate():
             lm = [ str(x) for x in board.legal_moves ]
             moves = []
@@ -365,8 +379,8 @@ while True:
                 moves.append(model(stm).item())
             
             whitetomove = whitetomove == False    
-
-            if random.randint(0,10) < 5:
+            r_move = False
+            if random.randint(0,10) < 8:
                 if whitetomove:
                     idx = moves.index(min(moves))
                 else:
@@ -375,15 +389,22 @@ while True:
                 board.push_san(lm[idx])
             else:    
                 board.push_san(lm[random.randint(0,len(lm)-1)])
+                r_move = True
             
             boardsvg = chess.svg.board(board=board)
             svg2png(bytestring=boardsvg, write_to='temp.jpg')
             png = cv2.imread('temp.jpg') 
-            
+
+            if r_move:
+                image = np.zeros((300, 300, 3), np.uint8)
+                image[:] = (0, 0, 255)
+                out.write(image)
+                out.write(image)
+
             for x in range(5):
                 out.write(png)
 
             counter += 1
-            if counter == 100:
-                out.release()
+            if counter == 1000:
                 break
+        out.release()
