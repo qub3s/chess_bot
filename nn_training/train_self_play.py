@@ -7,15 +7,15 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 import sys
+from cairosvg import svg2png
+import cv2
 
 class result_prediction(nn.Module):
     def __init__(self):
         super().__init__()
     
         self.both = nn.Sequential(
-            nn.Linear(12 * 64 + 1, 256),
-            nn.ReLU(),
-            nn.Linear(256, 64),
+            nn.Linear(12 * 64 + 1, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
@@ -122,15 +122,15 @@ def run_training(model, optimizer, loss_function, device, num_epochs, train_data
     val_accs = []
     
     for epoch in range(num_epochs):
-        print("Epoch: ",epoch)
+        #print("Epoch: ",epoch)
         sys.stdout.flush()
 
         train_loss = train( train_dataloader, optimizer, model, loss_function, device )
         
         val_loss = validate( val_dataloader, model, loss_function, device )
 
-        print("Train loss: ", train_loss)
-        print("Valitation loss: ", val_loss)
+        #print("Train loss: ", train_loss)
+        #print("Valitation loss: ", val_loss)
         
         early_stopping(val_loss, model)
 
@@ -221,117 +221,169 @@ def make_x_random_moves(n,board):
     
     return b
 
+def check_move(model, board, whitetomove, device, lvl):
+    if lvl == 0:
+        b = to_numpy(board)
+        y, stm = to_binary(b, whitetomove, 0)
+        stm = torch.tensor(stm).float().to(device)
+        return model(stm)
+    
+    lm = [ str(x) for x in board.legal_moves ]
+
+    moves = []
+    for x in lm:
+        bo = board.copy()
+        bo.push_san(x)
+        moves.append(check_move(model, bo, whitetomove == False, device, lvl-1))
+    
+    idx = 0
+    if whitetomove:
+        idx = moves.index(max(moves))
+    else:
+        idx = moves.index(min(moves))
+
+    return idx
+
+def play_game(model):
+    board = chess.Board()
+    whitetomove = True
+    moves = []
+    cnt = 0
+
+    while not board.is_checkmate() or not board.is_stalemate:
+        cnt += 1
+        
+        lm = [ str(x) for x in board.legal_moves ]
+        
+        if cnt > 1000 or len(lm) == 0:
+            return
+        
+        if random.randint(0,10 <= 5):
+            move = check_move(model, board, whitetomove, "cuda", 2)
+            board.push_san(lm[move])
+        else:
+            board.push_san( lm[random.randint(0,len(lm)-1)] )
+            
+            # safe the config
+            moves.append( to_numpy(board) )
+        
+        whitetomove = whitetomove == False
+
+    moves_results = []
+
+    if board.is_checkmate():
+        for x in moves:
+            # black had last move so white lost
+            if whitetomove:
+                moves_results.append((-1, x))
+            else:
+                moves_results.append((1, x))
+
+        return moves_results
+
+
+
 
 # https://www.chessprogramming.org/Stockfish_NNUE
 # train the first network on the results of games -> train another network base on the predictions of this network
 # extract 2 boards, one 3 moves before the end and one 8 moves before the end
 
 last_x_moves = 1
-pgn = open("datasets/lichess_db_standard_rated_2015-05.pgn", encoding="utf-8")
-
 sd = "1/2-1/2"
 sl = "0-1"
 sw = "1-0"
 
 positions = []
 Y = []
-elements = 1000
-cnt = 0
 
-while True:
-    game = chess.pgn.read_game(pgn)
+device = "cuda"
 
-    if game == None:
-        break
-        
-    board = game.board()
-    if len(Y) == elements:
-        break	
-    
-    #cnt += 1
-    #print(cnt)
-
-    if "WhiteElo" in game.headers.keys() and "BlackElo" in game.headers.keys() and int(game.headers["WhiteElo"]) >= 1700 and int(game.headers["BlackElo"]) >= 1700 and ("Classical" in game.headers["Event"] or "Blitz" in game.headers["Event"]):
-        total_move_num = count(game.mainline_moves())
-
-        whitetomove = True
-        for i, move in enumerate(game.mainline_moves()):
-            board.push(move)
-            
-            whitetomove = whitetomove == False
-            
-            if i >= total_move_num-last_x_moves and i > 20:
-                b = to_numpy(board)
-                result = None
-                if game.headers["Result"] == sd:
-                    result = 0
-                if game.headers["Result"] == sl:
-                    result = -1
-                if game.headers["Result"] == sw:
-                    result = 1
-                
-                y, stm = to_binary(b, whitetomove, result)
-                Y.append(y)
-                positions.append(stm)
-
-
-values, counts = np.unique(np.array(Y), return_counts=True)
-
-counts = counts - min(counts)
-for i, c in enumerate(counts):
-    if c != 0:
-        l = len(Y)
-        x = 0
-        while c > 0:
-            if Y[x] == values[i]:
-                Y.pop(x)
-                positions.pop(x) 
-                l = l-1
-                c = c-1
-                x -= 1
-            
-            x += 1
-
-            if c == 0 or x == l:
-                break
-
-print(len(Y))
-values, counts = np.unique(np.array(Y), return_counts=True)
-
-np.save("results.npy", np.array(Y))
-np.save("positions.npy", np.array(positions))
-
-Y = np.load('results.npy')
-positions = np.load('positions.npy')
-values, counts = np.unique(Y, return_counts=True)
-print(values)
-print(counts)
-
-print(len(Y))
-
-device = "cuda:0"
-
-model_path = "model.pth"
-epochs = 100
-lr = 0.0001
-batch_size = 1000
-
-early_stopping = EarlyStopping(model_path, patience=10, verbose=False, delta=0)
-
+# create model
 model = result_prediction()
 model.to(device)
 
+X = []
+y = []
+
+epochs = 3
+lr = 0.001
+batch_size = 100
+model_path = "self_play.pth"
+
 loss_function = torch.nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+epochs = 10
+cnt = 0
 
-positions = np.array(positions)
-print(positions.shape)
-Y = np.array(Y)
-print(Y.shape)
+while True:
+    # collect x games with result (one side wins)
+    
+    board = chess.Board()
+    res = play_game(model)
 
-X_train, X_test, y_train, y_test = train_test_split(positions, Y, test_size=0.1, random_state=42)
+    if res != None:
+        for x in res:
+            a, b = to_binary(x[1], True, 0)
+            X.append(b)
+            y.append(x[0])
 
-train_loader = simple_dataset(X_train, y_train)
-test_loader = simple_dataset(X_test, y_test)
+    if len(y) > batch_size:
+        cnt += 1
+        print(cnt)
+        early_stopping = EarlyStopping(model_path, patience=10, verbose=False, delta=0)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-run_training(model, optimizer, loss_function, device, epochs, train_loader, test_loader, early_stopping )
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+
+        train_loader = simple_dataset(X_train, y_train)
+        test_loader = simple_dataset(X_test, y_test)
+
+        run_training(model, optimizer, loss_function, device, epochs, train_loader, test_loader, early_stopping )
+        model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(device)))
+        y = []
+        X = []
+
+        out = cv2.VideoWriter(str(cnt)+'.mp4', cv2.VideoWriter_fourcc(*'mp4v') , 15, (390,390))
+ 
+        board = chess.Board()
+        whitetomove = True
+        counter = 0
+        while not board.is_checkmate() or not board.is_stalemate():
+            lm = [ str(x) for x in board.legal_moves ]
+            moves = []
+            if len(lm) == 0:
+                break
+
+            for x in lm:
+                bo = board.copy()
+                bo.push_san(x)
+                b = to_numpy(board)
+
+                a, stm = to_binary(b, whitetomove, 0)
+                stm = torch.tensor(stm).to(device).float()
+
+                moves.append(model(stm).item())
+            
+            whitetomove = whitetomove == False    
+
+            if random.randint(0,10) < 5:
+                if whitetomove:
+                    idx = moves.index(min(moves))
+                else:
+                    idx = moves.index(max(moves))
+
+                board.push_san(lm[idx])
+            else:    
+                board.push_san(lm[random.randint(0,len(lm)-1)])
+            
+            boardsvg = chess.svg.board(board=board)
+            svg2png(bytestring=boardsvg, write_to='temp.jpg')
+            png = cv2.imread('temp.jpg') 
+            
+            for x in range(5):
+                out.write(png)
+
+            counter += 1
+            if counter == 100:
+                out.release()
+                break
