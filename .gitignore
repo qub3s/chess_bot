@@ -8,3 +8,4 @@
 *.png
 *.npy
 zig-out/*
+.zig-cache/*
