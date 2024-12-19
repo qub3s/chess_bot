@@ -1,6 +1,8 @@
+# Install
+Fedora:
+dnf install flexiblas flexiblas-devel
+
 Attempt at writing chess game and chess bot.
 
-TODO Python extract weights
-TODO Zig implement NN-Eval
-TODO Alpha Beta pruning
-TODO Training
+TODO:
+- write NN

@@ -7,4 +7,4 @@
 *.pgn
 *.png
 *.npy
-*OpenBLAS*
+zig-out/*
