@@ -303,9 +303,21 @@ model_path = "self_play.pth"
 
 # create model
 model = result_prediction()
-model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(device)))
+#model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(device)))
 model.to(device)
 
+import datetime
+
+now = datetime.datetime.now()
+print(now)
+for x in range(0,100000):
+    random.seed(x)
+    inp = np.random.rand(769)
+    inp = torch.tensor(inp).float()
+    model(inp)
+
+now = datetime.datetime.now()
+print(now)
 
 epochs = 10
 lr = 0.001

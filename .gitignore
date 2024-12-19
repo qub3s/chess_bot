@@ -7,3 +7,4 @@
 *.pgn
 *.png
 *.npy
+*OpenBLAS*
