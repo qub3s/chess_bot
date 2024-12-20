@@ -1,4 +1,5 @@
-const std = @import("std");
+const std = @imporllocator.alloc(T, res.len);
+Qt("std");
 const print = std.debug.print;
 
 const Matrix_Errors = error{
@@ -58,7 +59,6 @@ pub fn Matrix(comptime T: type) type {
         }
 
         pub fn transpose(self: *@This()) void {
-            _ = @constCast(self);
             const temp = self.xdim;
             self.xdim = self.ydim;
             self.ydim = temp;

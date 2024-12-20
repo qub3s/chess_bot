@@ -15,8 +15,8 @@ pub fn gemv(T: type, A_rows: usize, A_cols: usize, A: []T, trans_a: bool, V: []T
     const transpose_a = if (trans_a) blas.CblasTrans else blas.CblasNoTrans;
 
     switch (T) {
-        f32 => blas.cblas_sgemv(blas.CblasRowMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
-        f64 => blas.cblas_dgemv(blas.CblasRowMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
+        f32 => blas.cblas_sgemv(blas.CblasColMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
+        f64 => blas.cblas_dgemv(blas.CblasColMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
         else => @compileError("Types outside of f32 and f64 are not supported"),
     }
 }
