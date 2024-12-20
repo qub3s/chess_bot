@@ -23,17 +23,22 @@ pub fn LinearLayer(comptime T: type) type {
         Allocator: std.mem.Allocator,
 
         eval: bool,
-        store_result: []T,
-        //grad_weight: []T,
-        //grad_bias: []T,
+        input_activations: []T,
+        grad_weight: []T,
+        grad_bias: []T,
+        //num_grad: usize,
 
         // randomly initialize
         pub fn init_rand(indim: usize, outdim: usize, Allocator: std.mem.Allocator, rnd: u64) !LinearLayer(T) {
+            // allocate memory
             const weight = try Allocator.alloc(T, indim * outdim);
             const bias = try Allocator.alloc(T, outdim);
             const bias_cpy = try Allocator.alloc(T, outdim);
-
-            const store_result = try Allocator.alloc(T, outdim);
+            const input_activations = try Allocator.alloc(T, indim);
+            const grad_weight = try Allocator.alloc(T, indim * outdim);
+            const grad_bias = try Allocator.alloc(T, outdim);
+            @memset(grad_weight, 0);
+            @memset(grad_bias, 0);
 
             var rand = std.rand.DefaultPrng.init(rnd);
 
@@ -46,7 +51,7 @@ pub fn LinearLayer(comptime T: type) type {
 
             @memcpy(bias_cpy, bias);
 
-            return LinearLayer(T){ .indim = indim, .outdim = outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .Allocator = Allocator, .store_result = store_result, .eval = true };
+            return LinearLayer(T){ .indim = indim, .outdim = outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .Allocator = Allocator, .grad_weight = grad_weight, .grad_bias = grad_bias, .eval = false };
         }
 
         pub fn deinit(self: @This()) void {
@@ -61,33 +66,51 @@ pub fn LinearLayer(comptime T: type) type {
                 return NN_Error.ErrorDimensionsNotMatch;
             }
 
+            if (!self.eval) {
+                @memcpy(self.input_activations, input);
+            }
+
             blas.gemv(T, self.outdim, self.indim, self.weight, false, input, self.bias_cpy, 1, 1);
 
             const result = try self.Allocator.alloc(T, self.outdim);
             @memcpy(result, self.bias_cpy);
             @memcpy(self.bias_cpy, self.bias);
 
-            if (!self.eval) {
-                self.Allocator.free(self.store_result);
-                self.store_result = try self.Allocator.alloc(T, self.bias.len);
-                @memcpy(self.store_result, result);
+            return result;
+        }
+
+        pub fn bp(self: *@This(), input: []T, result: []T) ![]T {
+            // create bias
+            for (0..self.grad_bias.len) |i| {
+                self.grad_bias[i] += input[i];
             }
+
+            // create weight matrix
+            for (0..input.len) |inp| {
+                for (0..self.input_activations.len) |act| {
+                    self.grad_weight[inp * self.input_activations.len + act] += self.input_activations[act] * input[inp];
+                }
+            }
+
+            // calculate the next layer error
+            @memset(result, 0);
+            blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
 
             return result;
         }
 
-        pub fn bp(self: @This(), input: []T, Allocator: std.mem.Allocator) ![]T {
-            if (input.len != self.indim) {
-                return NN_Error.ErrorDimensionsNotMatch;
+        // divide by number of rounds not implemented
+        pub fn step(self: *@This(), lr: T, batchsize: T) void {
+            for (0..self.weight.len) |w| {
+                self.weight[w] += self.grad_weight[w] / batchsize * lr;
             }
 
-            blas.gemv(T, self.outdim, self.indim, self.weight, true, input, self.bias_cpy, 1, 1);
+            for (0..self.bias.len) |b| {
+                self.bias[b] += self.grad_bias[b] * lr;
+            }
 
-            const result = try Allocator.alloc(T, self.outdim);
-            @memcpy(result, self.bias_cpy);
-            @memcpy(self.bias_cpy, self.bias);
-
-            return result;
+            @memset(self.grad_weight, 0);
+            @memset(self.grad_bias, 0);
         }
 
         pub fn print(self: @This()) void {
@@ -106,26 +129,22 @@ pub fn MSE(comptime T: type) type {
         s: []T,
         Allocator: std.mem.Allocator,
 
-        pub fn fp(self: *@This(), res: []T, sol: []T) ![]T {
+        pub fn fp(self: *@This(), res: []T, sol: []T) !void {
             if (!self.eval) {
                 self.Allocator.free(self.s);
                 self.s = try self.Allocator.alloc(T, res.len);
-                print("{}\n", .{self.s.len});
                 @memcpy(self.s, res);
             }
 
             for (0..res.len) |i| {
-                res[i] = (res[i] - sol[i]) * (res[i] - sol[i]);
+                res[i] = (sol[i] - res[i]) * (sol[i] - res[i]);
             }
-
-            return res;
         }
 
-        pub fn bp(self: @This(), sol: []T) ![]T {
+        pub fn bp(self: @This(), sol: []T) !void {
             for (0..self.s.len) |i| {
-                sol[i] = 2 * (self.s[i] - sol[i]);
+                sol[i] = 2 * (sol[i] - self.s[i]);
             }
-            return sol;
         }
     };
 }
@@ -140,9 +159,9 @@ pub fn relu_fp(comptime T: type, input: []T) []T {
 pub fn relu_bp(comptime T: type, input: []T) []T {
     for (0..input.len) |i| {
         if (input[i] > 0) {
-            input[i] = 1;
+            input[i] *= 1;
         } else {
-            input[i] = 0;
+            input[i] *= 0;
         }
     }
     return input;
@@ -155,47 +174,49 @@ pub fn main() !void {
     const gpa = general_purpose_alloc.allocator();
 
     const T: type = f32;
-    const inp1 = 15;
-    const out1 = 5;
-
-    const inp2 = 5;
-    const out2 = 1;
-
-    // init X
-    var y = try gpa.alloc(T, out2);
-    y[0] = 3;
-
-    var X = try gpa.alloc(T, inp1);
-    defer gpa.free(X);
-    for (0..inp1) |i| {
-        X[i] = @floatFromInt(i);
-    }
-
-    const random = try gpa.alloc(T, inp1);
+    const inp1 = 5;
+    const out1 = 1;
 
     // init layers
-    var l1 = try LinearLayer(T).init_rand(inp1, out1, gpa, 42);
-    var l2 = try LinearLayer(T).init_rand(inp2, out2, gpa, 42);
+    var l1 = try LinearLayer(T).init_rand(inp1, out1, gpa, 22);
+    const random = try gpa.alloc(T, inp1);
     var mse = MSE(T){ .eval = false, .s = random, .Allocator = gpa };
 
-    var y1 = try l1.fp(X);
-    defer gpa.free(y1);
-    y1 = relu_fp(T, y1);
+    //var rand = std.rand.DefaultPrng.init(0);
 
-    var y2 = try l2.fp(y1);
-    defer gpa.free(y2);
+    for (0..500) |data| {
+        var y = try gpa.alloc(T, out1);
+        var X = try gpa.alloc(T, inp1);
+        defer gpa.free(X);
+        defer gpa.free(y);
 
-    y2 = try mse.fp(y2, y);
+        if (data % 2 == 0) {
+            y[0] = 0;
 
-    for (0..y2.len) |i| {
-        print("{}\n", .{y2[i]});
+            for (0..inp1) |i| {
+                X[i] = 0; //rand.random().float(f32) * 0.1;
+            }
+        } else {
+            y[0] = 1;
+
+            for (0..inp1) |i| {
+                X[i] = 1; //rand.random().float(f32) * 10;
+            }
+        }
+
+        const y1 = try l1.fp(X);
+        defer gpa.free(y1);
+
+        try mse.fp(y1, y);
+
+        try mse.bp(y);
+
+        X = try l1.bp(y, X);
+
+        print("{}\n", .{y1[0]});
+        if (data % 4 == 0) {
+            l1.step(0.01, 10);
+        }
     }
-
-    y2 = try mse.bp(y);
-
-    for (0..y2.len) |i| {
-        print("{}\n", .{y2[i]});
-    }
-
     print("done... \n", .{});
 }
