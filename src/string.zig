@@ -37,6 +37,10 @@ pub const String = struct {
 
         try self.find(remove_string, &results);
 
+        if (results.items.len == 0) {
+            return;
+        }
+
         var new_string = try String_alloc.alloc(u8, self.str.len - remove_string.str.len * results.items.len);
 
         var sc: usize = 0;

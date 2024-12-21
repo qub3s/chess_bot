@@ -7,6 +7,11 @@ pub fn build(b: *std.Build) void {
         .target = b.host,
     });
 
+    const zcsv = b.dependency("zcsv", .{
+        .target = b.host,
+    });
+    exe.root_module.addImport("zcsv", zcsv.module("zcsv"));
+
     exe.linkSystemLibrary("flexiblas");
     exe.linkLibC();
 
