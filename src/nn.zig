@@ -8,6 +8,12 @@ const NN_Error = error{
     ErrorDimensionsNotMatch,
 };
 
+const LayerType = union {
+    linear: *LinearLayer,
+    activfunc: *ActivationFunction,
+    lossfunc: *LossFunction,
+};
+
 pub fn LinearLayer(comptime T: type) type {
     _ = switch (T) {
         f32 => 0,
@@ -125,14 +131,58 @@ pub fn LinearLayer(comptime T: type) type {
     };
 }
 
-pub fn MSE(comptime T: type) type {
+pub fn ActivationFunction(comptime T: type) type {
     return struct {
-        eval: bool,
+        type_: usize,
+
+        pub fn relu_fp(input: []T) []T {
+            for (0..input.len) |i| {
+                input[i] = @max(input[i], 0);
+            }
+            return input;
+        }
+
+        pub fn relu_bp(input: []T) []T {
+            for (0..input.len) |i| {
+                if (input[i] > 0) {
+                    input[i] *= 1;
+                } else {
+                    input[i] = 0;
+                }
+            }
+            return input;
+        }
+
+        pub fn fp(self: *@This(), input: []T) []T {
+            switch (self.type_) {
+                0 => return self.relu_fp(input),
+                else => @compileError("This value is wrongly set !!!"),
+            }
+        }
+
+        pub fn bp(self: *@This(), input: []T) []T {
+            switch (self.type_) {
+                0 => return self.relu_bp(input),
+                else => @compileError("This value is wrongly set !!!"),
+            }
+        }
+    };
+}
+
+pub fn LossFunction(comptime T: type) type {
+    return struct {
+        type_: usize,
         s: []T,
         Allocator: std.mem.Allocator,
 
-        pub fn fp(self: *@This(), res: []T, sol: []T) !void {
-            if (!self.eval) {
+        pub fn mse_init(Allocator: std.mem.Allocator) LossFunction(T) {
+            const s = Allocator.alloc(T, 1);
+
+            return struct { .type_ = 0, .s = s, .Allocator = Allocator };
+        }
+
+        pub fn mse_fp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
+            if (eval) {
                 self.Allocator.free(self.s);
                 self.s = try self.Allocator.alloc(T, res.len);
                 @memcpy(self.s, res);
@@ -143,30 +193,41 @@ pub fn MSE(comptime T: type) type {
             }
         }
 
-        pub fn bp(self: @This(), sol: []T) !void {
+        pub fn mse_bp(self: @This(), sol: []T) !void {
             for (0..self.s.len) |i| {
                 sol[i] = 2 * (sol[i] - self.s[i]);
+            }
+        }
+
+        pub fn fp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
+            switch (self.type_) {
+                0 => self.mse_fp(res, sol, eval),
+                else => @compileError("This value is wrongly set !!!"),
+            }
+        }
+
+        pub fn bp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
+            switch (self.type_) {
+                0 => self.mse_bp(res, sol, eval),
+                else => @compileError("This value is wrongly set !!!"),
             }
         }
     };
 }
 
-pub fn relu_fp(comptime T: type, input: []T) []T {
-    for (0..input.len) |i| {
-        input[i] = @max(input[i], 0);
-    }
-    return input;
-}
+pub fn Network(comptime T: type) type {
+    return struct {
+        layer: std.ArrayList(LayerType),
+        Allocator: std.mem.Allocator,
 
-pub fn relu_bp(comptime T: type, input: []T) []T {
-    for (0..input.len) |i| {
-        if (input[i] > 0) {
-            input[i] *= 1;
-        } else {
-            input[i] = 0;
+        pub fn add_LinearLayer(self: @This(), indim: usize, outdim: usize, rnd: u64) !LinearLayer(T) {
+            self.layer.append(try LinearLayer(T).init_rand(indim, outdim, self.Allocator, rnd));
         }
-    }
-    return input;
+
+        pub fn add_mse(self: @This()) void {
+            self.layer.append(try LossFunction(T).mse_init(self.Allocator));
+        }
+    };
 }
 
 pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList([]u8) {
@@ -207,8 +268,8 @@ pub fn overfit_linear_layer(gpa: std.mem.Allocator) !void {
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
     var l1 = try LinearLayer(T).init_rand(inp1, out1, gpa, 22);
-    const random = try gpa.alloc(T, inp1);
-    var mse = MSE(T){ .eval = false, .s = random, .Allocator = gpa };
+    //const random = try gpa.alloc(T, inp1);
+    //var mse = MSE(T){ .eval = false, .s = random, .Allocator = gpa };
 
     var rnd = std.rand.DefaultPrng.init(0);
     var rand = rnd.random();
@@ -238,7 +299,7 @@ pub fn overfit_linear_layer(gpa: std.mem.Allocator) !void {
 
         y1[0] = y1[0];
 
-        try mse.fp(y1, y);
+        //try mse.fp(y1, y);
 
         const e = y1[0];
         if (std.math.isNan(e) or std.math.isInf(e)) {
@@ -246,10 +307,10 @@ pub fn overfit_linear_layer(gpa: std.mem.Allocator) !void {
             break;
         }
 
-        mse_x += y1[0];
+        //mse_x += y1[0];
 
         //print("MSE: {any}\n", .{y1});
-        try mse.bp(y);
+        //try mse.bp(y);
 
         X = try l1.bp(y, X);
 
@@ -266,8 +327,10 @@ pub fn main() !void {
 
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
+    //try overfit_linear_layer(gpa);
 
-    try overfit_linear_layer(gpa);
+    var net = Network(f32){ .layer = std.ArrayList(LayerType).init(gpa), .Allocator = gpa };
+    net.add_LinearLayer(10 * 10, 1, 4);
 
     print("done... \n", .{});
 }
