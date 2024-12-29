@@ -6,13 +6,17 @@ const print = std.debug.print;
 
 const NN_Error = error{
     ErrorDimensionsNotMatch,
+    ErrorUnionWronglySet,
 };
 
-const LayerType = union {
-    linear: *LinearLayer,
-    activfunc: *ActivationFunction,
-    lossfunc: *LossFunction,
-};
+const LTtag = enum { linear, activfunc, lossfunc };
+pub fn LayerType(comptime T: type) type {
+    return union(LTtag) {
+        linear: LinearLayer(T),
+        activfunc: ActivationFunction(T),
+        lossfunc: LossFunction(T),
+    };
+}
 
 pub fn LinearLayer(comptime T: type) type {
     _ = switch (T) {
@@ -29,7 +33,6 @@ pub fn LinearLayer(comptime T: type) type {
         bias_cpy: []T, // saves additional allocation
         Allocator: std.mem.Allocator,
 
-        eval: bool,
         input_activations: []T,
         grad_weight: []T,
         grad_bias: []T,
@@ -58,7 +61,7 @@ pub fn LinearLayer(comptime T: type) type {
 
             @memcpy(bias_cpy, bias);
 
-            return LinearLayer(T){ .indim = indim, .outdim = outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .Allocator = Allocator, .grad_weight = grad_weight, .grad_bias = grad_bias, .eval = false };
+            return LinearLayer(T){ .indim = indim, .outdim = outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .Allocator = Allocator, .grad_weight = grad_weight, .grad_bias = grad_bias };
         }
 
         pub fn deinit(self: @This()) void {
@@ -68,25 +71,22 @@ pub fn LinearLayer(comptime T: type) type {
         }
 
         // foreward pass
-        pub fn fp(self: *@This(), input: []T) ![]T {
+        pub fn fp(self: *@This(), input: []T, result: []T, eval: bool) !void {
             if (input.len != self.indim) {
                 return NN_Error.ErrorDimensionsNotMatch;
             }
 
-            if (!self.eval) {
+            if (!eval) {
                 @memcpy(self.input_activations, input);
             }
 
             blas.gemv(T, self.outdim, self.indim, self.weight, false, input, self.bias_cpy, 1, 1);
 
-            const result = try self.Allocator.alloc(T, self.outdim);
             @memcpy(result, self.bias_cpy);
             @memcpy(self.bias_cpy, self.bias);
-
-            return result;
         }
 
-        pub fn bp(self: *@This(), input: []T, result: []T) ![]T {
+        pub fn bp(self: *@This(), input: []T, result: []T) !void {
             // create bias
             for (0..self.grad_bias.len) |i| {
                 self.grad_bias[i] += input[i];
@@ -95,15 +95,12 @@ pub fn LinearLayer(comptime T: type) type {
             // create weight matrix
             for (0..self.input_activations.len) |act| {
                 for (0..input.len) |inp| {
-                    //self.grad_weight[act * input.len + inp] += self.input_activations[act] * input[inp];
-                    self.grad_weight[inp * self.input_activations.len + act] += self.input_activations[act] * input[inp];
+                    self.grad_weight[act * input.len + inp] += self.input_activations[act] * input[inp];
                 }
             }
 
             @memset(result, 0);
             blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
-
-            return result;
         }
 
         pub fn step(self: *@This(), lr: T, batchsize: T) void {
@@ -115,14 +112,12 @@ pub fn LinearLayer(comptime T: type) type {
                 self.bias[b] += self.grad_bias[b] / batchsize * lr;
             }
 
-            //std.debug.print("{any}\n", .{self.grad_weight});
-
             @memset(self.grad_weight, 0);
             @memset(self.grad_bias, 0);
         }
 
         pub fn print(self: @This()) void {
-            std.debug.print("Weight: {}x{}", .{ self.indim, self.outdim });
+            std.debug.print("Weight: {}x{}: {any}", .{ self.indim, self.outdim, self.weight });
         }
 
         pub fn println(self: @This()) void {
@@ -134,36 +129,38 @@ pub fn LinearLayer(comptime T: type) type {
 pub fn ActivationFunction(comptime T: type) type {
     return struct {
         type_: usize,
+        s: []T,
+        Allocator: std.mem.Allocator,
 
-        pub fn relu_fp(input: []T) []T {
+        pub fn relu_fp(self: *@This(), input: []T, eval: bool) !void {
+            if (!eval) {
+                @memcpy(self.s, input);
+            }
+
             for (0..input.len) |i| {
                 input[i] = @max(input[i], 0);
             }
-            return input;
         }
 
-        pub fn relu_bp(input: []T) []T {
+        pub fn relu_bp(self: @This(), input: []T) void {
             for (0..input.len) |i| {
-                if (input[i] > 0) {
-                    input[i] *= 1;
-                } else {
+                if (self.s[i] < 0) {
                     input[i] = 0;
                 }
             }
-            return input;
         }
 
-        pub fn fp(self: *@This(), input: []T) []T {
+        pub fn fp(self: *@This(), input: []T, eval: bool) !void {
             switch (self.type_) {
-                0 => return self.relu_fp(input),
-                else => @compileError("This value is wrongly set !!!"),
+                0 => return try relu_fp(self, input, eval),
+                else => return NN_Error.ErrorUnionWronglySet,
             }
         }
 
-        pub fn bp(self: *@This(), input: []T) []T {
+        pub fn bp(self: @This(), input: []T) !void {
             switch (self.type_) {
-                0 => return self.relu_bp(input),
-                else => @compileError("This value is wrongly set !!!"),
+                0 => return relu_bp(self, input),
+                else => return NN_Error.ErrorUnionWronglySet,
             }
         }
     };
@@ -182,9 +179,7 @@ pub fn LossFunction(comptime T: type) type {
         }
 
         pub fn mse_fp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
-            if (eval) {
-                self.Allocator.free(self.s);
-                self.s = try self.Allocator.alloc(T, res.len);
+            if (!eval) {
                 @memcpy(self.s, res);
             }
 
@@ -200,32 +195,125 @@ pub fn LossFunction(comptime T: type) type {
         }
 
         pub fn fp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
-            switch (self.type_) {
+            try switch (self.type_) {
                 0 => self.mse_fp(res, sol, eval),
-                else => @compileError("This value is wrongly set !!!"),
-            }
+                else => return NN_Error.ErrorUnionWronglySet,
+            };
         }
 
-        pub fn bp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
-            switch (self.type_) {
-                0 => self.mse_bp(res, sol, eval),
-                else => @compileError("This value is wrongly set !!!"),
-            }
+        pub fn bp(self: *@This(), sol: []T) !void {
+            try switch (self.type_) {
+                0 => self.mse_bp(sol),
+                else => return NN_Error.ErrorUnionWronglySet,
+            };
         }
+    };
+}
+
+pub fn AdamsOptimizer(comptime T: type) type {
+    return struct {
+        grad: []T,
+        m: []T,
+        v: []T,
+        Allocator: std.mem.Allocator,
     };
 }
 
 pub fn Network(comptime T: type) type {
     return struct {
-        layer: std.ArrayList(LayerType),
+        layer: std.ArrayList(LayerType(T)),
         Allocator: std.mem.Allocator,
+        eval: bool,
 
-        pub fn add_LinearLayer(self: @This(), indim: usize, outdim: usize, rnd: u64) !LinearLayer(T) {
-            self.layer.append(try LinearLayer(T).init_rand(indim, outdim, self.Allocator, rnd));
+        pub fn add_LinearLayer(self: *@This(), indim: usize, outdim: usize, rnd: u64) !void {
+            try self.layer.append(LayerType(T){ .linear = try LinearLayer(T).init_rand(
+                indim,
+                outdim,
+                self.Allocator,
+                rnd,
+            ) });
         }
 
-        pub fn add_mse(self: @This()) void {
-            self.layer.append(try LossFunction(T).mse_init(self.Allocator));
+        pub fn add_ReLu(self: *@This(), dim: usize) !void {
+            try self.layer.append(LayerType(T){ .activfunc = ActivationFunction(T){ .type_ = 0, .Allocator = self.Allocator, .s = try self.Allocator.alloc(T, dim) } });
+        }
+
+        pub fn add_MSE(self: *@This(), dim: usize) !void {
+            try self.layer.append(LayerType(T){ .lossfunc = LossFunction(T){ .type_ = 0, .Allocator = self.Allocator, .s = try self.Allocator.alloc(T, dim) } });
+        }
+
+        pub fn fp(self: *@This(), input: []T, y: []T, res: []T) !void {
+            var fp_v = try self.Allocator.alloc(T, input.len);
+            @memcpy(fp_v, input);
+
+            for (0..self.layer.items.len) |i| {
+                fp_v = switch (self.layer.items[i]) {
+                    .linear => blk: {
+                        const result = try self.Allocator.alloc(T, self.layer.items[i].linear.outdim);
+                        try self.layer.items[i].linear.fp(fp_v, result, self.eval);
+                        self.Allocator.free(fp_v);
+                        break :blk result;
+                    },
+                    .activfunc => blk: {
+                        try self.layer.items[i].activfunc.fp(fp_v, self.eval);
+                        break :blk fp_v;
+                    },
+                    .lossfunc => blk: {
+                        try self.layer.items[i].lossfunc.fp(fp_v, y, self.eval);
+                        break :blk fp_v;
+                    },
+                };
+            }
+
+            @memcpy(res, fp_v);
+            self.Allocator.free(fp_v);
+        }
+
+        pub fn bp(self: *@This(), input: []T) !void {
+            var bp_v = try self.Allocator.alloc(T, input.len);
+            @memcpy(bp_v, input);
+
+            const rev = self.layer.items.len - 1;
+
+            for (0..self.layer.items.len) |i| {
+                bp_v = switch (self.layer.items[rev - i]) {
+                    .linear => blk: {
+                        const result = try self.Allocator.alloc(T, self.layer.items[rev - i].linear.indim);
+                        try self.layer.items[rev - i].linear.bp(bp_v, result);
+                        self.Allocator.free(bp_v);
+                        break :blk result;
+                    },
+                    .activfunc => blk: {
+                        try self.layer.items[rev - i].activfunc.bp(bp_v);
+                        break :blk bp_v;
+                    },
+                    .lossfunc => blk: {
+                        try self.layer.items[rev - i].lossfunc.bp(bp_v);
+                        break :blk bp_v;
+                    },
+                };
+            }
+        }
+
+        pub fn step(self: *@This(), lr: T, batchsize: T) !void {
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => self.layer.items[i].linear.step(lr, batchsize),
+                    .activfunc => {},
+                    .lossfunc => {},
+                }
+            }
+        }
+
+        pub fn out_num(self: *@This()) !void {
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => self.layer.items[i].linear.print(),
+                    .activfunc => print("Activ\n", .{}),
+                    .lossfunc => print("Loss\n", .{}),
+                }
+            }
+            print("\n", .{});
         }
     };
 }
@@ -257,26 +345,29 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
     return result;
 }
 
-pub fn overfit_linear_layer(gpa: std.mem.Allocator) !void {
-    const num_batches = 10000;
-    const batchsize = 100;
+pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
+    const num_batches = 20000;
+    const batchsize = 10;
     const lr = 0.001;
 
-    const T: type = f32;
     const inp1 = 784;
-    const out1 = 1;
+    const inp2 = 50;
+    const out1 = 50;
+    const out2 = 1;
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
-    var l1 = try LinearLayer(T).init_rand(inp1, out1, gpa, 22);
-    //const random = try gpa.alloc(T, inp1);
-    //var mse = MSE(T){ .eval = false, .s = random, .Allocator = gpa };
+    var net = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = false };
+    try net.add_LinearLayer(inp1, out1, 4);
+    try net.add_ReLu(inp2);
+    try net.add_LinearLayer(inp2, out2, 5);
+    try net.add_MSE(1);
 
     var rnd = std.rand.DefaultPrng.init(0);
     var rand = rnd.random();
     var mse_x: f32 = 0;
 
     for (0..batchsize * num_batches) |data| {
-        const sample = rand.intRangeAtMost(usize, 0, 10); //train_data.items.len - 1);
+        const sample = rand.intRangeAtMost(usize, 0, 100); //train_data.items.len - 1);
 
         var y = try gpa.alloc(T, 1);
         var X = try gpa.alloc(T, inp1);
@@ -284,42 +375,33 @@ pub fn overfit_linear_layer(gpa: std.mem.Allocator) !void {
         defer gpa.free(y);
 
         for (0..X.len - 1) |i| {
-            X[i] = @floatFromInt(train_data.items[sample][i + 1] / 255);
+            X[i] = @as(T, @floatFromInt(train_data.items[sample][i + 1])) / 255;
         }
 
         y[0] = @floatFromInt(train_data.items[sample][0]);
-        //if (train_data.items[sample][0] > 5) {
-        //    y[0] = 0;
-        //} else {
-        //    y[0] = 1;
-        //}
 
-        const y1 = try l1.fp(X);
-        defer gpa.free(y1);
+        const res = try gpa.alloc(T, y.len);
+        try net.fp(X, y, res);
 
-        y1[0] = y1[0];
+        const e = res[0];
 
-        //try mse.fp(y1, y);
-
-        const e = y1[0];
         if (std.math.isNan(e) or std.math.isInf(e)) {
-            print("break", .{});
+            print("break\n", .{});
             break;
         }
 
-        //mse_x += y1[0];
+        mse_x += res[0];
 
-        //print("MSE: {any}\n", .{y1});
-        //try mse.bp(y);
-
-        X = try l1.bp(y, X);
+        try net.bp(y);
 
         if (data % batchsize == 0 and data != 0) {
-            print("{}\n", .{mse_x / batchsize});
+            print("Err: {}\n", .{mse_x / batchsize});
             mse_x = 0;
-            l1.step(lr, batchsize);
+            try net.step(lr, batchsize);
         }
     }
+
+    try net.out_num();
 }
 
 pub fn main() !void {
@@ -327,10 +409,8 @@ pub fn main() !void {
 
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
-    //try overfit_linear_layer(gpa);
-
-    var net = Network(f32){ .layer = std.ArrayList(LayerType).init(gpa), .Allocator = gpa };
-    net.add_LinearLayer(10 * 10, 1, 4);
+    const T = f32;
+    try overfit_linear_layer(T, gpa);
 
     print("done... \n", .{});
 }
