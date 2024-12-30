@@ -7,11 +7,13 @@ const print = std.debug.print;
 const NN_Error = error{
     ErrorDimensionsNotMatch,
     ErrorUnionWronglySet,
+    ErrorLogic,
 };
 
-const LTtag = enum { linear, activfunc, lossfunc };
+const LayerTypeTag = enum { linear, activfunc, lossfunc };
+
 pub fn LayerType(comptime T: type) type {
-    return union(LTtag) {
+    return union(LayerTypeTag) {
         linear: LinearLayer(T),
         activfunc: ActivationFunction(T),
         lossfunc: LossFunction(T),
@@ -34,8 +36,8 @@ pub fn LinearLayer(comptime T: type) type {
         Allocator: std.mem.Allocator,
 
         input_activations: []T,
-        grad_weight: []T,
-        grad_bias: []T,
+        grad_weight: AdamsOptimizer(T),
+        grad_bias: AdamsOptimizer(T),
 
         // randomly initialize
         pub fn init_rand(indim: usize, outdim: usize, Allocator: std.mem.Allocator, rnd: u64) !LinearLayer(T) {
@@ -44,10 +46,9 @@ pub fn LinearLayer(comptime T: type) type {
             const bias = try Allocator.alloc(T, outdim);
             const bias_cpy = try Allocator.alloc(T, outdim);
             const input_activations = try Allocator.alloc(T, indim);
-            const grad_weight = try Allocator.alloc(T, indim * outdim);
-            const grad_bias = try Allocator.alloc(T, outdim);
-            @memset(grad_weight, 0);
-            @memset(grad_bias, 0);
+
+            const grad_weight = try AdamsOptimizer(T).init(indim * outdim, Allocator);
+            const grad_bias = try AdamsOptimizer(T).init(outdim, Allocator);
 
             var rand = std.rand.DefaultPrng.init(rnd);
 
@@ -88,14 +89,18 @@ pub fn LinearLayer(comptime T: type) type {
 
         pub fn bp(self: *@This(), input: []T, result: []T) !void {
             // create bias
-            for (0..self.grad_bias.len) |i| {
-                self.grad_bias[i] += input[i];
+            self.grad_weight.num_stored_grad += 1;
+            self.grad_bias.num_stored_grad += 1;
+            const sbias = self.grad_bias.grad;
+            const sweight = self.grad_weight.grad;
+
+            for (0..sbias.len) |i| {
+                sbias[i] += input[i];
             }
 
-            // create weight matrix
             for (0..self.input_activations.len) |act| {
                 for (0..input.len) |inp| {
-                    self.grad_weight[act * input.len + inp] += self.input_activations[act] * input[inp];
+                    sweight[act * input.len + inp] += self.input_activations[act] * input[inp];
                 }
             }
 
@@ -103,17 +108,9 @@ pub fn LinearLayer(comptime T: type) type {
             blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
         }
 
-        pub fn step(self: *@This(), lr: T, batchsize: T) void {
-            for (0..self.weight.len) |w| {
-                self.weight[w] += self.grad_weight[w] / batchsize * lr;
-            }
-
-            for (0..self.bias.len) |b| {
-                self.bias[b] += self.grad_bias[b] / batchsize * lr;
-            }
-
-            @memset(self.grad_weight, 0);
-            @memset(self.grad_bias, 0);
+        pub fn step(self: *@This(), lr: T) !void {
+            try self.grad_bias.step(lr, self.bias);
+            try self.grad_weight.step(lr, self.weight);
         }
 
         pub fn print(self: @This()) void {
@@ -215,7 +212,59 @@ pub fn AdamsOptimizer(comptime T: type) type {
         grad: []T,
         m: []T,
         v: []T,
+        t: T,
+        num_stored_grad: T,
         Allocator: std.mem.Allocator,
+
+        var eps: f32 = 10e-8;
+        var b1: f32 = 0.9;
+        var b2: f32 = 0.999;
+
+        pub fn init(dim: usize, Allocator: std.mem.Allocator) !AdamsOptimizer(T) {
+            const t = 0;
+            const num_stored_grad = 0;
+
+            const grad = try Allocator.alloc(T, dim);
+            const m = try Allocator.alloc(T, dim);
+            const v = try Allocator.alloc(T, dim);
+
+            @memset(grad, 0);
+            @memset(m, 0);
+            @memset(v, 0);
+
+            return AdamsOptimizer(T){ .grad = grad, .m = m, .v = v, .t = t, .num_stored_grad = num_stored_grad, .Allocator = Allocator };
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.Allocator.free(self.grad);
+            self.Allocator.free(self.m);
+            self.Allocator.free(self.v);
+        }
+
+        pub fn step(self: *@This(), lr: T, params: []T) !void {
+            self.t += 1;
+
+            if (self.num_stored_grad == 0) {
+                return NN_Error.ErrorLogic;
+            }
+
+            for (0..self.grad.len) |i| {
+                self.grad[i] /= self.num_stored_grad;
+            }
+
+            for (0..self.grad.len) |i| {
+                self.m[i] = AdamsOptimizer(T).b1 * self.m[i] + (1 - AdamsOptimizer(T).b1) * self.grad[i];
+                self.v[i] = AdamsOptimizer(T).b2 * self.v[i] + (1 - AdamsOptimizer(T).b2) * self.grad[i] * self.grad[i];
+
+                const mhat = self.m[i] / (1 - std.math.pow(T, AdamsOptimizer(T).b1, self.t));
+                const vhat = self.v[i] / (1 - std.math.pow(T, AdamsOptimizer(T).b2, self.t));
+
+                params[i] += lr * mhat / (@sqrt(vhat) + AdamsOptimizer(T).eps);
+            }
+
+            @memset(self.grad, 0);
+            self.num_stored_grad = 0;
+        }
     };
 }
 
@@ -295,10 +344,10 @@ pub fn Network(comptime T: type) type {
             }
         }
 
-        pub fn step(self: *@This(), lr: T, batchsize: T) !void {
+        pub fn step(self: *@This(), lr: T) !void {
             for (0..self.layer.items.len) |i| {
                 switch (self.layer.items[i]) {
-                    .linear => self.layer.items[i].linear.step(lr, batchsize),
+                    .linear => try self.layer.items[i].linear.step(lr),
                     .activfunc => {},
                     .lossfunc => {},
                 }
@@ -347,8 +396,8 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
 
 pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     const num_batches = 20000;
-    const batchsize = 10;
-    const lr = 0.001;
+    const batchsize = 100;
+    const lr = 0.01;
 
     const inp1 = 784;
     const inp2 = 50;
@@ -385,11 +434,6 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
 
         const e = res[0];
 
-        if (std.math.isNan(e) or std.math.isInf(e)) {
-            print("break\n", .{});
-            break;
-        }
-
         mse_x += res[0];
 
         try net.bp(y);
@@ -397,11 +441,16 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
         if (data % batchsize == 0 and data != 0) {
             print("Err: {}\n", .{mse_x / batchsize});
             mse_x = 0;
-            try net.step(lr, batchsize);
+            try net.step(lr);
+        }
+
+        if (std.math.isNan(e) or std.math.isInf(e)) {
+            print("break\n", .{});
+            break;
         }
     }
 
-    try net.out_num();
+    //try net.out_num();
 }
 
 pub fn main() !void {
