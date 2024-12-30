@@ -395,13 +395,13 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
 }
 
 pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
-    const num_batches = 20000;
+    const num_batches = 200;
     const batchsize = 100;
-    const lr = 0.01;
+    //const lr = 0.01;
 
     const inp1 = 784;
-    const inp2 = 50;
-    const out1 = 50;
+    const inp2 = 10000;
+    const out1 = 10000;
     const out2 = 1;
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
@@ -413,15 +413,16 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
 
     var rnd = std.rand.DefaultPrng.init(0);
     var rand = rnd.random();
-    var mse_x: f32 = 0;
+    //var mse_x: f32 = 0;
 
-    for (0..batchsize * num_batches) |data| {
+    var y = try gpa.alloc(T, 1);
+    var X = try gpa.alloc(T, inp1);
+    defer gpa.free(X);
+    defer gpa.free(y);
+    const res = try gpa.alloc(T, y.len);
+
+    for (0..batchsize * num_batches) |_| {
         const sample = rand.intRangeAtMost(usize, 0, 100); //train_data.items.len - 1);
-
-        var y = try gpa.alloc(T, 1);
-        var X = try gpa.alloc(T, inp1);
-        defer gpa.free(X);
-        defer gpa.free(y);
 
         for (0..X.len - 1) |i| {
             X[i] = @as(T, @floatFromInt(train_data.items[sample][i + 1])) / 255;
@@ -429,25 +430,24 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
 
         y[0] = @floatFromInt(train_data.items[sample][0]);
 
-        const res = try gpa.alloc(T, y.len);
         try net.fp(X, y, res);
 
-        const e = res[0];
+        //const e = res[0];
 
-        mse_x += res[0];
+        //mse_x += res[0];
 
-        try net.bp(y);
+        //try net.bp(y);
 
-        if (data % batchsize == 0 and data != 0) {
-            print("Err: {}\n", .{mse_x / batchsize});
-            mse_x = 0;
-            try net.step(lr);
-        }
+        //if (data % batchsize == 0 and data != 0) {
+        //    print("Err: {}\n", .{mse_x / batchsize});
+        //    mse_x = 0;
+        //    try net.step(lr);
+        //}
 
-        if (std.math.isNan(e) or std.math.isInf(e)) {
-            print("break\n", .{});
-            break;
-        }
+        //if (std.math.isNan(e) or std.math.isInf(e)) {
+        //    print("break\n", .{});
+        //    break;
+        //}
     }
 
     //try net.out_num();
