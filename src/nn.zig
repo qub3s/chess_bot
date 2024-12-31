@@ -400,8 +400,8 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     //const lr = 0.01;
 
     const inp1 = 784;
-    const inp2 = 10000;
-    const out1 = 10000;
+    const inp2 = 50;
+    const out1 = 50;
     const out2 = 1;
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
