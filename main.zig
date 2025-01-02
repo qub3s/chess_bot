@@ -323,14 +323,12 @@ fn visualize(board: *Board_s, size: i32) !void {
         }
     }
 
-    if (click_pos != -1 or first_draw.v) {
-        ray.ClearBackground(ray.RAYWHITE);
-        first_draw.v = false;
+    var visible_moves = std.ArrayList(i32).init(gpa);
+    var all_moves = std.ArrayList(move).init(gpa);
+    try possible_moves(board, &all_moves);
 
-        // get moves
-        var all_moves = std.ArrayList(move).init(gpa);
-        var visible_moves = std.ArrayList(i32).init(gpa);
-        try possible_moves(board, &all_moves);
+    if (click_pos != -1 or first_draw.v) {
+        first_draw.v = false;
 
         // check if move is valid
         if (last_click_pos.v != -1) {
@@ -358,49 +356,50 @@ fn visualize(board: *Board_s, size: i32) !void {
         if (click_pos != -1) {
             last_click_pos.v = click_pos;
         }
+    }
 
-        // collect moves of selected piece
-        for (0..all_moves.items.len) |i| {
-            if (last_click_pos.v == all_moves.items[i].x1 + all_moves.items[i].y1 * 8) {
-                try visible_moves.append(all_moves.items[i].x2 + all_moves.items[i].y2 * 8);
+    ray.ClearBackground(ray.RAYWHITE);
+    // draw pieces and fields
+    var x: i32 = 0;
+    var y: i32 = 0;
+    while (x < 8) : (x += 1) {
+        y = 0;
+        while (y < 8) : (y += 1) {
+            const xmin = size * (7 - x);
+            const ymin = size * (7 - y);
+
+            if (last_click_pos.v == y * 8 + x) {
+                ray.DrawRectangle(xmin, ymin, size, size, ray.DARKBLUE);
+            } else if (@mod(x + y, 2) == 0) {
+                ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
+            } else {
+                ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
+            }
+
+            const field_value = board.get(@intCast(x), @intCast(y));
+            if (field_value != 0) {
+                ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
             }
         }
+    }
 
-        // draw pieces and fields
-        var x: i32 = 0;
-        var y: i32 = 0;
-        while (x < 8) : (x += 1) {
-            y = 0;
-            while (y < 8) : (y += 1) {
-                const xmin = size * (7 - x);
-                const ymin = size * (7 - y);
-
-                if (last_click_pos.v == y * 8 + x) {
-                    ray.DrawRectangle(xmin, ymin, size, size, ray.DARKBLUE);
-                } else if (@mod(x + y, 2) == 0) {
-                    ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
-                } else {
-                    ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
-                }
-
-                const field_value = board.get(@intCast(x), @intCast(y));
-                if (field_value != 0) {
-                    ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
-                }
-            }
+    // collect moves of selected piece
+    for (0..all_moves.items.len) |i| {
+        if (last_click_pos.v == all_moves.items[i].x1 + all_moves.items[i].y1 * 8) {
+            try visible_moves.append(all_moves.items[i].x2 + all_moves.items[i].y2 * 8);
         }
+    }
 
-        x = 0;
-        while (x < 8) : (x += 1) {
-            y = 0;
-            while (y < 8) : (y += 1) {
-                const xmin = size * (7 - x);
-                const ymin = size * (7 - y);
+    x = 0;
+    while (x < 8) : (x += 1) {
+        y = 0;
+        while (y < 8) : (y += 1) {
+            const xmin = size * (7 - x);
+            const ymin = size * (7 - y);
 
-                for (0..visible_moves.items.len) |i| {
-                    if (visible_moves.items[i] == y * 8 + x) {
-                        ray.DrawCircle(xmin + @divTrunc(size, 2), ymin + @divTrunc(size, 2), @floatFromInt(@divTrunc(size, 6)), ray.DARKBLUE);
-                    }
+            for (0..visible_moves.items.len) |i| {
+                if (visible_moves.items[i] == y * 8 + x) {
+                    ray.DrawCircle(xmin + @divTrunc(size, 2), ymin + @divTrunc(size, 2), @floatFromInt(@divTrunc(size, 6)), ray.DARKBLUE);
                 }
             }
         }
