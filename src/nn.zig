@@ -175,13 +175,13 @@ pub fn LossFunction(comptime T: type) type {
             return struct { .type_ = 0, .s = s, .Allocator = Allocator };
         }
 
-        pub fn mse_fp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
+        pub fn mse_fp(self: *@This(), res: []T, sol: []T, err: []T, eval: bool) !void {
             if (!eval) {
                 @memcpy(self.s, res);
             }
 
             for (0..res.len) |i| {
-                res[i] = (sol[i] - res[i]) * (sol[i] - res[i]);
+                err[i] = (sol[i] - res[i]) * (sol[i] - res[i]);
             }
         }
 
@@ -191,9 +191,9 @@ pub fn LossFunction(comptime T: type) type {
             }
         }
 
-        pub fn fp(self: *@This(), res: []T, sol: []T, eval: bool) !void {
+        pub fn fp(self: *@This(), res: []T, sol: []T, err: []T, eval: bool) !void {
             try switch (self.type_) {
-                0 => self.mse_fp(res, sol, eval),
+                0 => self.mse_fp(res, sol, err, eval),
                 else => return NN_Error.ErrorUnionWronglySet,
             };
         }
@@ -291,7 +291,7 @@ pub fn Network(comptime T: type) type {
             try self.layer.append(LayerType(T){ .lossfunc = LossFunction(T){ .type_ = 0, .Allocator = self.Allocator, .s = try self.Allocator.alloc(T, dim) } });
         }
 
-        pub fn fp(self: *@This(), input: []T, y: []T, res: []T) !void {
+        pub fn fp(self: *@This(), input: []T, y: []T, res: []T, err: []T) !void {
             var fp_v = try self.Allocator.alloc(T, input.len);
             @memcpy(fp_v, input);
 
@@ -308,7 +308,7 @@ pub fn Network(comptime T: type) type {
                         break :blk fp_v;
                     },
                     .lossfunc => blk: {
-                        try self.layer.items[i].lossfunc.fp(fp_v, y, self.eval);
+                        try self.layer.items[i].lossfunc.fp(fp_v, y, err, self.eval);
                         break :blk fp_v;
                     },
                 };
@@ -394,72 +394,72 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
     return result;
 }
 
-pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
-    const num_batches = 200;
-    const batchsize = 100;
-    //const lr = 0.01;
-
-    const inp1 = 784;
-    const inp2 = 50;
-    const out1 = 50;
-    const out2 = 1;
-    const train_data = try parseFile("src/mnist_test.csv", gpa);
-
-    var net = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = false };
-    try net.add_LinearLayer(inp1, out1, 4);
-    try net.add_ReLu(inp2);
-    try net.add_LinearLayer(inp2, out2, 5);
-    try net.add_MSE(1);
-
-    var rnd = std.rand.DefaultPrng.init(0);
-    var rand = rnd.random();
-    //var mse_x: f32 = 0;
-
-    var y = try gpa.alloc(T, 1);
-    var X = try gpa.alloc(T, inp1);
-    defer gpa.free(X);
-    defer gpa.free(y);
-    const res = try gpa.alloc(T, y.len);
-
-    for (0..batchsize * num_batches) |_| {
-        const sample = rand.intRangeAtMost(usize, 0, 100); //train_data.items.len - 1);
-
-        for (0..X.len - 1) |i| {
-            X[i] = @as(T, @floatFromInt(train_data.items[sample][i + 1])) / 255;
-        }
-
-        y[0] = @floatFromInt(train_data.items[sample][0]);
-
-        try net.fp(X, y, res);
-
-        //const e = res[0];
-
-        //mse_x += res[0];
-
-        //try net.bp(y);
-
-        //if (data % batchsize == 0 and data != 0) {
-        //    print("Err: {}\n", .{mse_x / batchsize});
-        //    mse_x = 0;
-        //    try net.step(lr);
-        //}
-
-        //if (std.math.isNan(e) or std.math.isInf(e)) {
-        //    print("break\n", .{});
-        //    break;
-        //}
-    }
-
-    //try net.out_num();
-}
-
-pub fn main() !void {
-    print("compiles... \n", .{});
-
-    var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = general_purpose_alloc.allocator();
-    const T = f32;
-    try overfit_linear_layer(T, gpa);
-
-    print("done... \n", .{});
-}
+//pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
+//    const num_batches = 200;
+//    const batchsize = 100;
+//    //const lr = 0.01;
+//
+//    const inp1 = 784;
+//    const inp2 = 50;
+//    const out1 = 50;
+//    const out2 = 1;
+//    const train_data = try parseFile("src/mnist_test.csv", gpa);
+//
+//    var net = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = false };
+//    try net.add_LinearLayer(inp1, out1, 4);
+//    try net.add_ReLu(inp2);
+//    try net.add_LinearLayer(inp2, out2, 5);
+//    try net.add_MSE(1);
+//
+//    var rnd = std.rand.DefaultPrng.init(0);
+//    var rand = rnd.random();
+//    //var mse_x: f32 = 0;
+//
+//    var y = try gpa.alloc(T, 1);
+//    var X = try gpa.alloc(T, inp1);
+//    defer gpa.free(X);
+//    defer gpa.free(y);
+//    const res = try gpa.alloc(T, y.len);
+//
+//    for (0..batchsize * num_batches) |_| {
+//        const sample = rand.intRangeAtMost(usize, 0, 100); //train_data.items.len - 1);
+//
+//        for (0..X.len - 1) |i| {
+//            X[i] = @as(T, @floatFromInt(train_data.items[sample][i + 1])) / 255;
+//        }
+//
+//        y[0] = @floatFromInt(train_data.items[sample][0]);
+//
+//        try net.fp(X, y, res);
+//
+//        //const e = res[0];
+//
+//        //mse_x += res[0];
+//
+//        //try net.bp(y);
+//
+//        //if (data % batchsize == 0 and data != 0) {
+//        //    print("Err: {}\n", .{mse_x / batchsize});
+//        //    mse_x = 0;
+//        //    try net.step(lr);
+//        //}
+//
+//        //if (std.math.isNan(e) or std.math.isInf(e)) {
+//        //    print("break\n", .{});
+//        //    break;
+//        //}
+//    }
+//
+//    //try net.out_num();
+//}
+//
+//pub fn main() !void {
+//    print("compiles... \n", .{});
+//
+//    var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+//    const gpa = general_purpose_alloc.allocator();
+//    const T = f32;
+//    try overfit_linear_layer(T, gpa);
+//
+//    print("done... \n", .{});
+//}

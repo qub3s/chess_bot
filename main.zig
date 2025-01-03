@@ -45,8 +45,8 @@ const Board_s = struct {
         self.set(0, 0, 3);
         self.set(1, 0, 5);
         self.set(2, 0, 4);
-        self.set(3, 0, 2);
-        self.set(4, 0, 1);
+        self.set(3, 0, 1);
+        self.set(4, 0, 2);
         self.set(5, 0, 4);
         self.set(6, 0, 5);
         self.set(7, 0, 3);
@@ -55,8 +55,8 @@ const Board_s = struct {
         self.set(0, 7, 9);
         self.set(1, 7, 11);
         self.set(2, 7, 10);
-        self.set(3, 7, 8);
-        self.set(4, 7, 7);
+        self.set(3, 7, 7);
+        self.set(4, 7, 8);
         self.set(5, 7, 10);
         self.set(6, 7, 11);
         self.set(7, 7, 9);
@@ -370,7 +370,7 @@ fn visualize(board: *Board_s, size: i32) !void {
 
             if (last_click_pos.v == y * 8 + x) {
                 ray.DrawRectangle(xmin, ymin, size, size, ray.DARKBLUE);
-            } else if (@mod(x + y, 2) == 0) {
+            } else if (@mod(x + y, 2) != 0) {
                 ray.DrawRectangle(xmin, ymin, size, size, white_board_tile_color);
             } else {
                 ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
@@ -416,7 +416,7 @@ fn inverse_board(board: Board_s, result: *[64]i32) void {
 
 fn get_board_768(p64: [64]i32, p768: *[768]nn_type) void {
     for (0..768) |i| {
-        if (p64[i % 64] == i % 64) {
+        if (p64[i % 64] == i / 64) {
             p768[i] = 1;
         } else {
             p768[i] = 0;
@@ -424,10 +424,12 @@ fn get_board_768(p64: [64]i32, p768: *[768]nn_type) void {
     }
 }
 
-fn eval_single_position(board: Board_s, model: *nn.Network(nn_type)) !void {
+fn eval_single_board_position(board: Board_s, model: *nn.Network(nn_type)) !nn_type {
     var flipped_board = mem.zeroes([64]i32);
     var input = mem.zeroes([768]nn_type);
-    const result = mem.zeroes([1]nn_type);
+    var sol = mem.zeroes([1]nn_type);
+    var result = mem.zeroes([1]nn_type);
+    var err = mem.zeroes([1]nn_type);
 
     if (board.white_to_move) {
         for (0..board.pieces.len) |i| {
@@ -436,50 +438,52 @@ fn eval_single_position(board: Board_s, model: *nn.Network(nn_type)) !void {
     } else {
         inverse_board(board, &flipped_board);
     }
+
     get_board_768(flipped_board, &input);
-    try model.fp(&input, @constCast(&result), @constCast(&result));
+    try model.fp(&input, &sol, &result, &err);
+    return result[0];
 }
 
 fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
     const T = nn_type;
+    const seed = 0;
     var model = nn.Network(T){ .layer = std.ArrayList(nn.LayerType(T)).init(allocator), .Allocator = allocator, .eval = true };
-    try model.add_LinearLayer(768, 392, 42);
-    try model.add_ReLu(392);
-    try model.add_LinearLayer(392, 256, 42);
+    try model.add_LinearLayer(768, 256, seed);
     try model.add_ReLu(256);
-    try model.add_LinearLayer(256, 64, 42);
+    try model.add_LinearLayer(256, 64, seed);
     try model.add_ReLu(64);
-    try model.add_LinearLayer(64, 1, 42);
+    try model.add_LinearLayer(64, 1, seed);
     try model.add_MSE(1);
 
     const board = Board_s.init();
-    try eval_single_position(board, &model);
+    const val = try eval_single_board_position(board, &model);
+    print("{}\n", .{val});
 
     return;
 }
 
 pub fn main() !void {
-    print("compiles...", .{});
+    print("compiles...\n", .{});
     try stage_one_train(gpa);
-    const screenWidth = 1000;
-    const screenHeight = 1000;
-    const tile_size = 125;
+    //const screenWidth = 1000;
+    //const screenHeight = 1000;
+    //const tile_size = 125;
 
-    // declare allocator
-    var board = Board_s.init();
-    board.white_castled = true;
-    ray.InitWindow(screenWidth, screenHeight, "");
-    defer ray.CloseWindow();
+    //// declare allocator
+    //var board = Board_s.init();
+    //board.white_castled = true;
+    //ray.InitWindow(screenWidth, screenHeight, "");
+    //defer ray.CloseWindow();
 
-    ray.SetTargetFPS(30);
+    //ray.SetTargetFPS(30);
 
-    try load_piece_textures();
+    //try load_piece_textures();
 
-    while (!ray.WindowShouldClose()) {
-        ray.BeginDrawing();
-        defer ray.EndDrawing();
+    //while (!ray.WindowShouldClose()) {
+    //    ray.BeginDrawing();
+    //    defer ray.EndDrawing();
 
-        try visualize(&board, tile_size);
-    }
+    //    try visualize(&board, tile_size);
+    //}
 }
