@@ -10,6 +10,9 @@ const nn_type = f32;
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = general_purpose_allocator.allocator();
 
+var rnd = std.rand.DefaultPrng.init(0);
+var rand = rnd.random();
+
 // board colors
 const black_color: u32 = 0xf0d9b5ff;
 const white_color: u32 = 0xb58863ff;
@@ -18,6 +21,7 @@ const white_color: u32 = 0xb58863ff;
 var textures_pieces: [12]ray.Texture = undefined;
 const tile_pos = struct { x: i32, y: i32 };
 const move = struct { x1: i32, y1: i32, x2: i32, y2: i32 };
+const board_evaluation = struct { board: Board_s, value: f32 };
 
 // empty = 0, wking = 1, wqueen = 2, wrook = 3, wbishop = 4, wknight = 5, wpawn = 6, bking = 7 ...
 const Board_s = struct {
@@ -127,7 +131,12 @@ const Board_s = struct {
                 // add pawn white moves
                 else if (board.pieces[i] == 6) {
                     const capr = board.pieces[@intCast(x - 1 + (y + 1) * 8)];
-                    const capl = board.pieces[@intCast(x + 1 + (y + 1) * 8)];
+                    var capl: i32 = 0;
+                    if (x != 7) {
+                        capl = board.pieces[@intCast(x + 1 + (y + 1) * 8)];
+                    } else {
+                        capl = 0;
+                    }
                     const push = board.pieces[@intCast(x + (y + 1) * 8)];
 
                     // capture left
@@ -155,7 +164,12 @@ const Board_s = struct {
                 }
                 // add pawn black moves
                 else if (board.pieces[i] == 12) {
-                    const capr = board.pieces[@intCast(x - 1 + (y - 1) * 8)];
+                    var capr: i32 = 0;
+                    if (x != 0) {
+                        capr = board.pieces[@intCast(x - 1 + (y - 1) * 8)];
+                    } else {
+                        capr = 0;
+                    }
                     const capl = board.pieces[@intCast(x + 1 + (y - 1) * 8)];
                     const push = board.pieces[@intCast(x + (y - 1) * 8)];
 
@@ -233,10 +247,19 @@ const Board_s = struct {
         return Board_s{ .white_castled = self.white_castled, .black_castled = self.black_castled, .pieces = copy_pieces, .white_to_move = self.white_to_move };
     }
 
+    //TODO change the value of the pieces
     pub fn inverse_board(board: Board_s, result: *[64]i32) void {
         for (0..8) |x| {
-            for (0..4) |y| {
-                result[x + y * 8] = board.pieces[x + (7 - y) * 8];
+            for (0..8) |y| {
+                const val = board.pieces[x + y * 8];
+
+                if (val == 0) {
+                    result[x + (7 - y) * 8] = 0;
+                } else if (val > 6) {
+                    result[x + (7 - y) * 8] = val - 6;
+                } else if (val <= 6) {
+                    result[x + (7 - y) * 8] = val + 6;
+                }
             }
         }
     }
@@ -304,7 +327,7 @@ const Board_s = struct {
 
 fn get_board_768(p64: [64]i32, p768: *[768]nn_type) void {
     for (0..768) |i| {
-        if (p64[i % 64] == i % 64) {
+        if (p64[i % 64] == 1 + i / 64) {
             p768[i] = 1;
         } else {
             p768[i] = 0;
@@ -423,12 +446,8 @@ fn visualize(board: *Board_s, size: i32) !void {
     }
 }
 
-fn eval_single_board_position(board: Board_s, model: *nn.Network(nn_type)) !nn_type {
+fn get_input(board: Board_s, p768: *[768]f32) void {
     var flipped_board = mem.zeroes([64]i32);
-    var input = mem.zeroes([768]nn_type);
-    var sol = mem.zeroes([1]nn_type);
-    var result = mem.zeroes([1]nn_type);
-    var err = mem.zeroes([1]nn_type);
 
     if (board.white_to_move) {
         for (0..board.pieces.len) |i| {
@@ -438,70 +457,144 @@ fn eval_single_board_position(board: Board_s, model: *nn.Network(nn_type)) !nn_t
         board.inverse_board(&flipped_board);
     }
 
-    get_board_768(flipped_board, &input);
+    get_board_768(flipped_board, p768);
+}
+
+fn eval_single_board_position(board: Board_s, model: *nn.Network(nn_type)) !nn_type {
+    var input = mem.zeroes([768]nn_type);
+    var sol = mem.zeroes([1]nn_type);
+    var result = mem.zeroes([1]nn_type);
+    var err = mem.zeroes([1]nn_type);
+
+    get_input(board, &input);
     try model.fp(&input, &sol, &result, &err);
     return result[0];
 }
 
-fn play_engine_game(engine: *nn.Network(nn_type)) !void {
+fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation)) !void {
     var num_move: i32 = 0;
     var board = Board_s.init();
 
-    while (board.check_win() == 0 and num_move < 300) {
-        std.time.sleep(1000000000);
+    while (board.check_win() == 0 and num_move < 1000) {
+        //std.time.sleep(10000000);
 
+        const rnd_num = rand.float(f32);
         var pos_moves = std.ArrayList(move).init(gpa);
         try board.possible_moves(&pos_moves);
 
-        for (pos_moves.items) |mv| {
-            var move_to_eval = board.copy();
-            move_to_eval.make_move_m(mv);
-            _ = try eval_single_board_position(move_to_eval, engine);
+        if (rnd_num < random) {
+            var min: usize = undefined;
+            var min_value: f32 = std.math.inf(f32);
+
+            for (0..pos_moves.items.len) |i| {
+                var move_to_eval = board.copy();
+                move_to_eval.make_move_m(pos_moves.items[i]);
+                const val = try eval_single_board_position(move_to_eval, engine);
+
+                if (val < min_value) {
+                    min_value = val;
+                    min = i;
+                }
+            }
+
+            board.make_move_m(pos_moves.items[min]);
+        } else {
+            board.make_move_m(pos_moves.items[rand.intRangeAtMost(usize, 0, pos_moves.items.len - 1)]);
         }
 
+        if (board.white_to_move) {
+            try result.append(board_evaluation{ .board = board.copy(), .value = @floatFromInt(num_move) });
+        } else {
+            try result.append(board_evaluation{ .board = board.copy(), .value = @floatFromInt(-num_move) });
+        }
+
+        ray.BeginDrawing();
+        defer ray.EndDrawing();
+        try visualize(&board, 125);
         num_move += 1;
-        print("{}\n", .{num_move});
     }
 
-    _ = try eval_single_board_position(board, engine);
+    const res: f32 = @floatFromInt(board.check_win());
+    for (0..@intCast(num_move)) |i| {
+        result.items[i].value /= res * @as(f32, @floatFromInt(num_move));
+    }
+
+    print("{}\n", .{res});
+    print("{}\n", .{num_move});
+}
+
+fn train(engine: *nn.Network(nn_type), result: *std.ArrayList(board_evaluation), epochs: usize, lr: f32) !void {
+    const batchsize = result.items.len;
+    var err = std.mem.zeroes([1]nn_type);
+    var res = std.mem.zeroes([1]nn_type);
+
+    for (0..batchsize * epochs) |i| {
+        const sample = rand.intRangeAtMost(usize, 0, batchsize - 1);
+        var X = std.mem.zeroes([768]nn_type);
+        get_input(result.items[sample].board, &X);
+
+        var y: [1]nn_type = undefined;
+        y[0] = result.items[sample].value;
+
+        try engine.fp(&X, &y, &res, &err);
+
+        const e = res[0];
+        try engine.bp(&y);
+
+        if (i % batchsize == 0 and i != 0) {
+            try engine.step(lr);
+        }
+
+        if (std.math.isNan(e) or std.math.isInf(e)) {
+            print("break\n", .{});
+            break;
+        }
+    }
 }
 
 fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
     const T = nn_type;
-    const seed = 0;
+    const seed = 42;
     var model = nn.Network(T){ .layer = std.ArrayList(nn.LayerType(T)).init(allocator), .Allocator = allocator, .eval = true };
-    try model.add_LinearLayer(768, 256, seed);
-    try model.add_ReLu(256);
-    try model.add_LinearLayer(256, 64, seed);
+    try model.add_LinearLayer(768, 64, seed);
     try model.add_ReLu(64);
-    try model.add_LinearLayer(64, 1, seed);
+    try model.add_LinearLayer(64, 32, seed);
+    try model.add_ReLu(32);
+    try model.add_LinearLayer(32, 1, seed);
     try model.add_MSE(1);
 
-    const board = Board_s.init();
-    const val = try eval_single_board_position(board, &model);
-    print("{}\n", .{val});
-    try play_engine_game(&model);
+    for (0..100) |_| {
+        var res = std.ArrayList(board_evaluation).init(allocator);
+        defer res.deinit();
+
+        while (res.items.len < 1000) {
+            try play_engine_game(&model, 0.5, &res);
+        }
+
+        try train(&model, &res, 20, 0.01);
+    }
 
     return;
 }
 
 pub fn main() !void {
     print("compiles...\n", .{});
-    try stage_one_train(gpa);
-    //const screenWidth = 1000;
-    //const screenHeight = 1000;
+    const screenWidth = 1000;
+    const screenHeight = 1000;
     //const tile_size = 125;
 
-    //// declare allocator
-    //var board = Board_s.init();
-    //board.white_castled = true;
-    //ray.InitWindow(screenWidth, screenHeight, "");
-    //defer ray.CloseWindow();
+    // declare allocator
+    var board = Board_s.init();
+    board.white_castled = true;
+    ray.InitWindow(screenWidth, screenHeight, "");
+    defer ray.CloseWindow();
 
-    //ray.SetTargetFPS(30);
+    ray.SetTargetFPS(30);
 
-    //try load_piece_textures();
+    try load_piece_textures();
+
+    try stage_one_train(gpa);
 
     //while (!ray.WindowShouldClose()) {
     //    ray.BeginDrawing();
