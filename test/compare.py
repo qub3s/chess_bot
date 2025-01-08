@@ -35,8 +35,8 @@ def forewad_bechmark(epochs):
         Xs = torch.tensor(Xs).float()
         res = model(Xs)
 
-torch.set_num_interop_threads(12) 
-torch.set_num_threads(12)  
+torch.set_num_interop_threads(16) 
+torch.set_num_threads(16)  
 print(torch.get_num_threads())
 print(torch.get_num_interop_threads())
 
@@ -44,6 +44,7 @@ start = time.time()
 a = torch.randn(20000, 20000)
 b = torch.randn(20000, 20000)
 c = torch.matmul(a, b)
+
 #forewad_bechmark(100000)
 end = time.time()
 print(end - start)

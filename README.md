@@ -1,13 +1,23 @@
-## Install
+## Setup
 Fedora:
 dnf install flexiblas flexiblas-devel
+switch to serial -> flexiblas default OPEN-BLAS-SERIAL 
+
 
 ## DONE
 - Write Board visualization
-- Write basic chess rules (missing castling, en passant and promoting other than queen)
 - Write CPU NN (Adams, Linear Layer, ReLU, MSE)
+- Write basic chess rules, still missing:
+    - draw at move or positional 
+    - draw at 50 move no pawn move
+    - castling
+    - en passant
+    - promoting other than to queen 
 
 ## TODO:
-- Implement simple learning that shows improvement
+- Benchmark and compare performance against pytorch
+- Implement multi-threading during training (play multiple games in parallel)
+- Implement a learning technique that shows an improvement and convincingly beats random initialization
 - Implement search with Alpha-Beta
-- More sophisticated training
+- Train strong NN
+- Implement multi-threading during evaluation (parallelised alpha beta pruning)

@@ -506,7 +506,7 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
 }
 
 pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
-    const num_batches = 2000;
+    const num_batches = 10; //2000;
     const batchsize = 100;
     const lr = 0.001;
 
@@ -567,19 +567,20 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     }
 }
 
-pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
-    var model = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
-    try model.add_LinearLayer(768, 64, seed);
-    try model.add_ReLu(64);
-    try model.add_LinearLayer(64, 32, seed);
-    try model.add_ReLu(32);
-    try model.add_LinearLayer(32, 1, seed);
-    try model.add_MSE(1);
-
-    
-
-
-}
+//pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
+//    var model = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
+//    try model.add_LinearLayer(768, 64, seed);
+//    try model.add_ReLu(64);
+//    try model.add_LinearLayer(64, 32, seed);
+//    try model.add_ReLu(32);
+//    try model.add_LinearLayer(32, 1, seed);
+//    try model.add_MSE(1);
+//
+//    var input = std.mem.zeros([768
+//
+//
+//
+//}
 
 pub fn main() !void {
     print("compiles... \n", .{});
