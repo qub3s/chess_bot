@@ -8,6 +8,7 @@ const NN_Error = error{
     ErrorDimensionsNotMatch,
     ErrorUnionWronglySet,
     ErrorLogic,
+    NetworkParametersNotConsistent,
 };
 
 const LayerTypeTag = enum { linear, activfunc, lossfunc };
@@ -364,6 +365,117 @@ pub fn Network(comptime T: type) type {
             }
             print("\n", .{});
         }
+
+        // File Layout:
+        // - 1 byte (u8) for how many bytes per weight (f32 -> 4, f64 -> 8)
+        // - 4 bytes (u32) (number of layers)
+        // for every layer 8 bytes (u64) that show the number of bytes for the weights, followed by 8 bytes (u64) that show the nunber of bytes for the bias
+        // then all the data
+        pub fn save(self: @This(), fileName: []const u8) !void {
+            const size_T: u8 = @sizeOf(T);
+            var num_linear_layer: u32 = 0;
+            var layerweights = std.ArrayList(u64).init(self.Allocator);
+            var layerbias = std.ArrayList(u64).init(self.Allocator);
+
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => blk: {
+                        num_linear_layer += 1;
+                        try layerweights.append(self.layer.items[i].linear.outdim * self.layer.items[i].linear.indim);
+                        try layerbias.append(self.layer.items[i].linear.outdim);
+                        break :blk;
+                    },
+                    .activfunc => {},
+                    .lossfunc => {},
+                }
+            }
+
+            const file = try std.fs.cwd().createFile(fileName, .{ .read = false });
+            const writer = file.writer();
+
+            try writer.writeInt(u8, size_T, std.builtin.Endian.little);
+            try writer.writeInt(u32, num_linear_layer, std.builtin.Endian.little);
+
+            for (0..layerweights.items.len) |i| {
+                try writer.writeInt(u64, layerweights.items[i], std.builtin.Endian.little);
+                try writer.writeInt(u64, layerbias.items[i], std.builtin.Endian.little);
+            }
+
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => blk: {
+                        const weights = std.mem.bytesAsSlice(u8, self.layer.items[i].linear.weight);
+                        const bias = std.mem.bytesAsSlice(u8, self.layer.items[i].linear.bias);
+
+                        try writer.writeAll(weights);
+                        try writer.writeAll(bias);
+                        break :blk;
+                    },
+                    .activfunc => {},
+                    .lossfunc => {},
+                }
+            }
+        }
+
+        pub fn load(self: @This(), fileName: []const u8) !void {
+            const file = try std.fs.cwd().openFile(fileName, .{ .mode = .read_only });
+            const reader = file.reader();
+
+            if (try reader.readInt(u8, std.builtin.Endian.little) != @sizeOf(T)) {
+                return NN_Error.NetworkParametersNotConsistent;
+            }
+
+            const number_of_layers = try reader.readInt(u32, std.builtin.Endian.little);
+
+            var num_linear_layer: u32 = 0;
+            var layerweights = std.ArrayList(u64).init(self.Allocator);
+            var layerbias = std.ArrayList(u64).init(self.Allocator);
+
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => blk: {
+                        num_linear_layer += 1;
+                        try layerweights.append(self.layer.items[i].linear.outdim * self.layer.items[i].linear.indim);
+                        try layerbias.append(self.layer.items[i].linear.outdim);
+                        break :blk;
+                    },
+                    .activfunc => {},
+                    .lossfunc => {},
+                }
+            }
+
+            if (num_linear_layer != number_of_layers) {
+                return NN_Error.NetworkParametersNotConsistent;
+            }
+
+            for (0..layerweights.items.len) |i| {
+                const lw = try reader.readInt(u64, std.builtin.Endian.little);
+                const lb = try reader.readInt(u64, std.builtin.Endian.little);
+
+                if (layerweights.items[i] != lw or layerbias.items[i] != lb) {
+                    return NN_Error.NetworkParametersNotConsistent;
+                }
+            }
+
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => blk: {
+                        const weights = std.mem.bytesAsSlice(u8, self.layer.items[i].linear.weight);
+                        const bias = std.mem.bytesAsSlice(u8, self.layer.items[i].linear.bias);
+
+                        const lenw = try reader.readAll(weights);
+                        const lenb = try reader.readAll(bias);
+
+                        if (lenw != self.layer.items[i].linear.weight.len or lenb != self.layer.items[i].linear.bias.len) {
+                            return NN_Error.NetworkParametersNotConsistent;
+                        }
+                        break :blk;
+                    },
+                    .activfunc => {},
+                    .lossfunc => {},
+                }
+            }
+        }
     };
 }
 
@@ -390,7 +502,6 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
 
         try result.append(arr);
     }
-
     return result;
 }
 
@@ -456,6 +567,20 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     }
 }
 
+pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
+    var model = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
+    try model.add_LinearLayer(768, 64, seed);
+    try model.add_ReLu(64);
+    try model.add_LinearLayer(64, 32, seed);
+    try model.add_ReLu(32);
+    try model.add_LinearLayer(32, 1, seed);
+    try model.add_MSE(1);
+
+    
+
+
+}
+
 pub fn main() !void {
     print("compiles... \n", .{});
 
@@ -464,5 +589,5 @@ pub fn main() !void {
     const T = f32;
     try overfit_linear_layer(T, gpa);
 
-    print("done... \n", .{});
+    //print("done... \n", .{});
 }
