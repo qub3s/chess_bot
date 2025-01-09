@@ -34,11 +34,25 @@ def forewad_bechmark(runs):
     for a in range(runs):
         res = model(Xs)
 
+<<<<<<< HEAD
 torch.set_num_interop_threads(1) 
 torch.set_num_threads(1)  
 
 start = time.time()
 forewad_bechmark(100000)
+=======
+torch.set_num_interop_threads(16) 
+torch.set_num_threads(16)  
+print(torch.get_num_threads())
+print(torch.get_num_interop_threads())
+
+start = time.time()
+a = torch.randn(20000, 20000)
+b = torch.randn(20000, 20000)
+c = torch.matmul(a, b)
+
+#forewad_bechmark(100000)
+>>>>>>> bfbd2cbe6d328910cfae6c2e01b65b9fb0807c14
 end = time.time()
 print(end - start)
 
