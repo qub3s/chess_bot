@@ -576,6 +576,10 @@ pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
     try model.add_LinearLayer(32, 1, seed);
     try model.add_MSE(1);
 
+
+
+}
+
     
 
 
