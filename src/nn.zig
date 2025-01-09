@@ -274,6 +274,13 @@ pub fn Network(comptime T: type) type {
         layer: std.ArrayList(LayerType(T)),
         Allocator: std.mem.Allocator,
         eval: bool,
+        // these variables prevent additional allocations
+        max_layer_size: u32,
+        allocation_field: []T,
+
+        pub fn init(layer: std.ArrayList(LayerType(T)), Allocator: std.mem.Allocator, eval: bool) Network(T) {
+            return Network(T){ .layer = layer, .Allocator = Allocator, .eval = eval, .max_layer_size = 0, .allocation_field = undefined };
+        }
 
         pub fn add_LinearLayer(self: *@This(), indim: usize, outdim: usize, rnd: u64) !void {
             try self.layer.append(LayerType(T){ .linear = try LinearLayer(T).init_rand(
@@ -282,6 +289,16 @@ pub fn Network(comptime T: type) type {
                 self.Allocator,
                 rnd,
             ) });
+
+            if (self.max_layer_size < indim) {
+                self.max_layer_size = @intCast(indim);
+                self.allocation_field = try self.Allocator.alloc(T, self.max_layer_size);
+            }
+
+            if (self.max_layer_size < outdim) {
+                self.max_layer_size = @intCast(outdim);
+                self.allocation_field = try self.Allocator.alloc(T, self.max_layer_size);
+            }
         }
 
         pub fn add_ReLu(self: *@This(), dim: usize) !void {
@@ -293,30 +310,26 @@ pub fn Network(comptime T: type) type {
         }
 
         pub fn fp(self: *@This(), input: []T, y: []T, res: []T, err: []T) !void {
-            var fp_v = try self.Allocator.alloc(T, input.len);
-            @memcpy(fp_v, input);
+            var LayerInput = input;
 
             for (0..self.layer.items.len) |i| {
-                fp_v = switch (self.layer.items[i]) {
+                LayerInput = switch (self.layer.items[i]) {
                     .linear => blk: {
-                        const result = try self.Allocator.alloc(T, self.layer.items[i].linear.outdim);
-                        try self.layer.items[i].linear.fp(fp_v, result, self.eval);
-                        self.Allocator.free(fp_v);
-                        break :blk result;
+                        try self.layer.items[i].linear.fp(LayerInput, self.allocation_field[0..self.layer.items[i].linear.outdim], self.eval);
+                        break :blk self.allocation_field[0..self.layer.items[i].linear.outdim];
                     },
                     .activfunc => blk: {
-                        try self.layer.items[i].activfunc.fp(fp_v, self.eval);
-                        break :blk fp_v;
+                        try self.layer.items[i].activfunc.fp(LayerInput, self.eval);
+                        break :blk LayerInput;
                     },
                     .lossfunc => blk: {
-                        try self.layer.items[i].lossfunc.fp(fp_v, y, err, self.eval);
-                        break :blk fp_v;
+                        try self.layer.items[i].lossfunc.fp(LayerInput, y, err, self.eval);
+                        break :blk LayerInput;
                     },
                 };
             }
 
-            @memcpy(res, fp_v);
-            self.Allocator.free(fp_v);
+            @memcpy(res, LayerInput);
         }
 
         pub fn bp(self: *@This(), input: []T) !void {
@@ -516,7 +529,7 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     const out2 = 1;
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
-    var net = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = false };
+    var net = Network(T).init(std.ArrayList(LayerType(T)).init(gpa), gpa, false);
     try net.add_LinearLayer(inp1, out1, 64);
     try net.add_ReLu(inp2);
     try net.add_LinearLayer(inp2, out2, 32);
@@ -536,6 +549,7 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     defer gpa.free(err);
 
     const res = try gpa.alloc(T, y.len);
+    defer gpa.free(res);
 
     for (0..batchsize * num_batches) |data| {
         const sample = rand.intRangeAtMost(usize, 0, 100); //train_data.items.len - 1);
@@ -567,22 +581,28 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     }
 }
 
-pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
-    var model = Network(T){ .layer = std.ArrayList(LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
-    try model.add_LinearLayer(768, 64, seed);
-    try model.add_ReLu(64);
-    try model.add_LinearLayer(64, 32, seed);
+pub fn benchmarking(T: type, gpa: std.mem.Allocator, iterations: u32) !void {
+    const seed = 42;
+    var model = Network(T).init(std.ArrayList(LayerType(T)).init(gpa), gpa, true);
+    try model.add_LinearLayer(768, 1000, seed);
+    try model.add_ReLu(1000);
+    try model.add_LinearLayer(1000, 32, seed);
     try model.add_ReLu(32);
     try model.add_LinearLayer(32, 1, seed);
-    try model.add_MSE(1);
 
+    const X = try gpa.alloc(T, 768);
+    defer gpa.free(X);
+    const y = try gpa.alloc(T, 1);
+    defer gpa.free(y);
+    const res = try gpa.alloc(T, 1);
+    defer gpa.free(res);
+    const err = try gpa.alloc(T, 1);
+    defer gpa.free(err);
 
-
-}
-
-    
-
-
+    for (0..iterations) |_| {
+        X[iterations % 768] += 1;
+        try model.fp(X, y, res, err);
+    }
 }
 
 pub fn main() !void {
@@ -591,7 +611,10 @@ pub fn main() !void {
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
     const T = f32;
-    try overfit_linear_layer(T, gpa);
+
+    try benchmarking(T, gpa, 100000);
+
+    //try overfit_linear_layer(T, gpa);
 
     //print("done... \n", .{});
 }

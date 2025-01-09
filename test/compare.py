@@ -10,8 +10,8 @@ class Model(torch.nn.Module):
         super(Model, self).__init__()
 
         self.activation = torch.nn.ReLU()
-        self.linear1 = torch.nn.Linear(768, 50)
-        self.linear2 = torch.nn.Linear(50, 32)
+        self.linear1 = torch.nn.Linear(768, 1000)
+        self.linear2 = torch.nn.Linear(1000, 32)
         self.linear3 = torch.nn.Linear(32, 1)
 
     def forward(self, x):
@@ -23,22 +23,19 @@ class Model(torch.nn.Module):
 
         return x
 
-def forewad_bechmark(epochs):
+def forewad_bechmark(runs):
     model = Model()
 
-    loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    for a in range(epochs):
-        Xs = np.zeros((1,768))
+    Xs = np.zeros((1,768))
+    Xs = torch.tensor(Xs).float()
 
-        Xs = torch.tensor(Xs).float()
+    for a in range(runs):
         res = model(Xs)
 
 torch.set_num_interop_threads(1) 
 torch.set_num_threads(1)  
-print(torch.get_num_threads())
-print(torch.get_num_interop_threads())
 
 start = time.time()
 forewad_bechmark(100000)
