@@ -584,9 +584,9 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
 pub fn benchmarking(T: type, gpa: std.mem.Allocator, iterations: u32) !void {
     const seed = 42;
     var model = Network(T).init(std.ArrayList(LayerType(T)).init(gpa), gpa, true);
-    try model.add_LinearLayer(768, 1000, seed);
-    try model.add_ReLu(1000);
-    try model.add_LinearLayer(1000, 32, seed);
+    try model.add_LinearLayer(768, 250, seed);
+    try model.add_ReLu(250);
+    try model.add_LinearLayer(250, 32, seed);
     try model.add_ReLu(32);
     try model.add_LinearLayer(32, 1, seed);
 

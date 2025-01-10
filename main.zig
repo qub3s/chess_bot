@@ -609,7 +609,7 @@ fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.Arra
     }
 
     if (res == 0) {
-        print("removed", .{});
+        print("removed\n", .{});
         for (0..@intCast(num_move)) |_| {
             _ = result.pop();
         }
@@ -709,7 +709,7 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
     const T = nn_type;
     const seed = 22;
-    var model = nn.Network(T){ .layer = std.ArrayList(nn.LayerType(T)).init(allocator), .Allocator = allocator, .eval = true };
+    var model = nn.Network(T).init(std.ArrayList(nn.LayerType(T)).init(allocator), allocator, true);
     try model.add_LinearLayer(768, 64, seed);
     try model.add_ReLu(64);
     try model.add_LinearLayer(64, 32, seed);
@@ -724,8 +724,8 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
         defer res.deinit();
 
         while (res.items.len < 10000) {
-            print("{} ", .{res.items.len});
-            try play_engine_game(&model, 0.9, &res);
+            print("{} \n", .{res.items.len});
+            try play_engine_game(&model, 0, &res);
         }
 
         print("\ntrain\n ", .{});

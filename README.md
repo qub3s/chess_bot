@@ -15,7 +15,6 @@ switch to serial -> flexiblas default OPEN-BLAS-SERIAL
     - promoting other than to queen 
 
 ## TODO:
-- Benchmark and compare performance against pytorch
 - Implement multi-threading during training (play multiple games in parallel)
 - Implement a learning technique that shows an improvement and convincingly beats random initialization
 - Implement search with Alpha-Beta
