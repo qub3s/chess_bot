@@ -66,6 +66,18 @@ pub fn LinearLayer(comptime T: type) type {
             return LinearLayer(T){ .indim = indim, .outdim = outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .Allocator = Allocator, .grad_weight = grad_weight, .grad_bias = grad_bias };
         }
 
+        pub fn copy(self: *@This()) !LinearLayer(T) {
+            const weight = try self.Allocator.alloc(T, self.indim * self.outdim);
+            const bias = try self.Allocator.alloc(T, self.outdim);
+            const bias_cpy = try self.Allocator.alloc(T, self.outdim);
+            const input_activations = try self.Allocator.alloc(T, self.indim);
+
+            const grad_weight = self.grad_weight.copy();
+            const grad_bias = self.grad_bias.copy();
+
+            return LinearLayer{ .indim = self.indim, .outdim = self.outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .grad_weight = grad_weight, .grad_bias = grad_bias, .Allocator = self.Allocator };
+        }
+
         pub fn deinit(self: @This()) void {
             self.Allocator.free(self.weight);
             self.Allocator.free(self.bias);
@@ -130,6 +142,13 @@ pub fn ActivationFunction(comptime T: type) type {
         s: []T,
         Allocator: std.mem.Allocator,
 
+        pub fn copy(self: *@This()) !ActivationFunction(T) {
+            const s = self.Allocator.alloc(T, self.s.len);
+            @memset(s, self.s);
+
+            return LossFunction{ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
+        }
+
         pub fn relu_fp(self: *@This(), input: []T, eval: bool) !void {
             if (!eval) {
                 @memcpy(self.s, input);
@@ -174,6 +193,13 @@ pub fn LossFunction(comptime T: type) type {
             const s = Allocator.alloc(T, 1);
 
             return struct { .type_ = 0, .s = s, .Allocator = Allocator };
+        }
+
+        pub fn copy(self: *@This()) !LossFunction(T) {
+            const s = self.Allocator.alloc(T, self.s.len);
+            @memset(s, self.s);
+
+            return LossFunction{ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
         }
 
         pub fn mse_fp(self: *@This(), res: []T, sol: []T, err: []T, eval: bool) !void {
@@ -236,6 +262,19 @@ pub fn AdamsOptimizer(comptime T: type) type {
             return AdamsOptimizer(T){ .grad = grad, .m = m, .v = v, .t = t, .num_stored_grad = num_stored_grad, .Allocator = Allocator };
         }
 
+        pub fn copy(self: *@This()) !AdamsOptimizer(T) {
+            const grad = self.Allocator.alloc(T, self.grad.len);
+            @memcpy(grad, self.grad);
+            const m = self.Allocator.alloc(T, self.m.len);
+            @memcpy(m, self.m);
+            const v = self.Allocator.alloc(T, self.v.len);
+            @memcpy(v, self.v);
+            const t = self.Allocator.alloc(T, self.t.len);
+            @memcpy(t, self.t);
+
+            return AdamsOptimizer{ .grad = grad, .m = m, .v = v, .t = t, .num_stored_grad = self.num_stored_grad, .Allocator = self.Allocator };
+        }
+
         pub fn deinit(self: *@This()) void {
             self.Allocator.free(self.grad);
             self.Allocator.free(self.m);
@@ -278,8 +317,23 @@ pub fn Network(comptime T: type) type {
         max_layer_size: u32,
         allocation_field: []T,
 
-        pub fn init(layer: std.ArrayList(LayerType(T)), Allocator: std.mem.Allocator, eval: bool) Network(T) {
-            return Network(T){ .layer = layer, .Allocator = Allocator, .eval = eval, .max_layer_size = 0, .allocation_field = undefined };
+        pub fn init(allocator: std.mem.Allocator, eval: bool) Network(T) {
+            return Network(T){ .layer = std.ArrayList(LayerType(T)).init(allocator), .Allocator = allocator, .eval = eval, .max_layer_size = 0, .allocation_field = undefined };
+        }
+
+        pub fn copy(self: *@This()) Network(T) {
+            const layer = std.ArrayList(LayerType(T)).init(self.Allocator);
+            const allocation_field = self.Allocator.alloc(T, self.allocation_field);
+
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => try layer.append(self.layer.items[i].linear.copy()),
+                    .activfunc => layer.append(self.layer.items[i].activfunc.copy()),
+                    .lossfunc => layer.append(self.layer.items[i].activfunc.copy()),
+                }
+            }
+
+            return Network(T){ .layer = layer, .Allocator = self.Allocator, .eval = self.eval, .max_layer_size = self.max_layer_size, .allocation_field = allocation_field };
         }
 
         pub fn add_LinearLayer(self: *@This(), indim: usize, outdim: usize, rnd: u64) !void {
@@ -583,7 +637,7 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
 
 pub fn benchmarking(T: type, gpa: std.mem.Allocator, iterations: u32) !void {
     const seed = 42;
-    var model = Network(T).init(std.ArrayList(LayerType(T)).init(gpa), gpa, true);
+    var model = Network(T).init(gpa, true);
     try model.add_LinearLayer(768, 250, seed);
     try model.add_ReLu(250);
     try model.add_LinearLayer(250, 32, seed);
@@ -608,11 +662,11 @@ pub fn benchmarking(T: type, gpa: std.mem.Allocator, iterations: u32) !void {
 pub fn main() !void {
     print("compiles... \n", .{});
 
-    var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = general_purpose_alloc.allocator();
-    const T = f32;
+    //var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+    //const gpa = general_purpose_alloc.allocator();
+    //const T = f32;
 
-    try benchmarking(T, gpa, 100000);
+    //try benchmarking(T, gpa, 100000);
 
     //try overfit_linear_layer(T, gpa);
 

@@ -5,6 +5,8 @@ const ray = @cImport({
 const print = std.debug.print;
 const mem = @import("std").mem;
 const nn = @import("src/nn.zig");
+const tpool = @import("src/thread_pool.zig");
+
 const nn_type = f32;
 const Error = error{
     ErrorLogic,
@@ -572,31 +574,46 @@ fn make_random_move(board: *Board_s) !void {
     board.make_move_m(pos_moves.items[rnd_i]);
 }
 
-fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation)) !void {
+fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation)) void {
     var num_move: i32 = 0;
     var board = Board_s.init();
+    var errb = false;
 
     while (board.check_win() == 0 and num_move < 550) {
         const rnd_num = rand.float(f32);
 
         if (rnd_num < random) {
-            board = try play_move_single_eval(engine, &board);
+            board = play_move_single_eval(engine, &board) catch |err| {
+                print("Error: {}\n", .{err});
+                errb = true;
+                break;
+            };
         } else {
-            try make_random_move(&board);
+            make_random_move(&board) catch |err| {
+                print("Error: {}\n", .{err});
+                errb = true;
+                break;
+            };
         }
 
         if (board.white_to_move) {
-            try result.append(board_evaluation{ .board = board.copy(), .value = @floatFromInt(num_move) });
+            result.append(board_evaluation{ .board = board.copy(), .value = @floatFromInt(num_move) }) catch |err| {
+                print("Error: {}\n", .{err});
+                errb = true;
+                break;
+            };
         } else {
-            try result.append(board_evaluation{ .board = board.copy(), .value = @floatFromInt(-num_move) });
+            result.append(board_evaluation{ .board = board.copy(), .value = @floatFromInt(-num_move) }) catch |err| {
+                print("Error: {}\n", .{err});
+                errb = true;
+                break;
+            };
         }
 
-        ray.BeginDrawing();
-        defer ray.EndDrawing();
-        try visualize(&board, 125);
         num_move += 1;
-        //print("{}\n", .{num_move});
     }
+
+    print("{}\n", .{num_move});
 
     const res: f32 = @floatFromInt(board.check_win());
 
@@ -709,7 +726,7 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
     const T = nn_type;
     const seed = 22;
-    var model = nn.Network(T).init(std.ArrayList(nn.LayerType(T)).init(allocator), allocator, true);
+    var model = nn.Network(T).init(allocator, true);
     try model.add_LinearLayer(768, 64, seed);
     try model.add_ReLu(64);
     try model.add_LinearLayer(64, 32, seed);
@@ -717,41 +734,40 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
     try model.add_LinearLayer(32, 1, seed);
     try model.add_MSE(1);
 
-    for (0..10) |i| {
-        print("Train run: {}\n", .{i});
+    // create an stack of NNs that store the NNs for the threads
+    var p: tpool.Pool = undefined;
+    p.init(allocator, 4);
 
+    var results = std.ArrayList(*std.ArrayList(board_evaluation)).init(allocator);
+
+    for (0..100) |_| {
         var res = std.ArrayList(board_evaluation).init(allocator);
-        defer res.deinit();
-
-        while (res.items.len < 10000) {
-            print("{} \n", .{res.items.len});
-            try play_engine_game(&model, 0, &res);
-        }
-
-        print("\ntrain\n ", .{});
-
-        try train(&model, &res, 50, 0.001);
-        try model.save("first_try.model");
+        try results.append(&res);
+        try p.spawn(play_engine_game, .{ &model, 0.5, &res });
     }
+    p.finish();
+
+    //try train(&model, &res, 50, 0.001);
+    //try model.save("first_try.model");
 
     return;
 }
 
 pub fn main() !void {
     print("compiles...\n", .{});
-    const screenWidth = 1000;
-    const screenHeight = 1000;
+    //const screenWidth = 1000;
+    //const screenHeight = 1000;
     //const tile_size = 125;
 
     // declare allocator
     var board = Board_s.init();
     board.white_castled = true;
-    ray.InitWindow(screenWidth, screenHeight, "");
-    defer ray.CloseWindow();
+    //ray.InitWindow(screenWidth, screenHeight, "");
+    //defer ray.CloseWindow();
 
-    ray.SetTargetFPS(30);
+    //ray.SetTargetFPS(30);
 
-    try load_piece_textures();
+    //try load_piece_textures();
     try stage_one_train(gpa);
 
     //const T = nn_type;
