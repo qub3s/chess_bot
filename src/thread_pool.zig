@@ -32,7 +32,7 @@ pub fn init(pool: *Pool, allocator: std.mem.Allocator, max_number_of_workers: u3
     pool.number_of_workers = 0;
     pool.sem_running.permits = 1;
     pool.process_list = std.ArrayList(*fnstruct).init(allocator);
-    pool.spawn_config = std.Thread.SpawnConfig{ .stack_size = 16 * 1024 * 1024, .allocator = allocator };
+    pool.spawn_config = std.Thread.SpawnConfig{ .stack_size = 100 * 1024 * 1024, .allocator = allocator };
 }
 
 // this function needs to be always under a mutex lock

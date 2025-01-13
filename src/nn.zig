@@ -68,9 +68,13 @@ pub fn LinearLayer(comptime T: type) type {
 
         pub fn copy(self: *@This()) !LinearLayer(T) {
             const weight = try self.Allocator.alloc(T, self.indim * self.outdim);
+            @memcpy(weight, self.weight);
             const bias = try self.Allocator.alloc(T, self.outdim);
+            @memcpy(bias, self.bias);
             const bias_cpy = try self.Allocator.alloc(T, self.outdim);
+            @memcpy(bias_cpy, self.bias_cpy);
             const input_activations = try self.Allocator.alloc(T, self.indim);
+            @memcpy(input_activations, self.input_activations);
 
             const grad_weight = try self.grad_weight.copy();
             const grad_bias = try self.grad_bias.copy();
@@ -192,7 +196,7 @@ pub fn LossFunction(comptime T: type) type {
         pub fn mse_init(Allocator: std.mem.Allocator) LossFunction(T) {
             const s = Allocator.alloc(T, 1);
 
-            return struct { .type_ = 0, .s = s, .Allocator = Allocator };
+            return LossFunction(T){ .type_ = 0, .s = s, .Allocator = Allocator };
         }
 
         pub fn copy(self: *@This()) !LossFunction(T) {
@@ -672,9 +676,35 @@ pub fn benchmarking(T: type, gpa: std.mem.Allocator, iterations: u32) !void {
 pub fn main() !void {
     print("compiles... \n", .{});
 
-    //var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    //const gpa = general_purpose_alloc.allocator();
-    //const T = f32;
+    var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = general_purpose_alloc.allocator();
+    const T = f32;
+
+    const seed = 42;
+    var model = Network(T).init(gpa, true);
+    try model.add_LinearLayer(768, 250, seed);
+    try model.add_ReLu(250);
+    try model.add_LinearLayer(250, 32, seed);
+    try model.add_ReLu(32);
+    try model.add_LinearLayer(32, 1, seed);
+
+    const X = try gpa.alloc(T, 768);
+    defer gpa.free(X);
+    const y = try gpa.alloc(T, 1);
+    defer gpa.free(y);
+    const res = try gpa.alloc(T, 1);
+    defer gpa.free(res);
+    const err = try gpa.alloc(T, 1);
+    defer gpa.free(err);
+
+    var model2 = try model.copy();
+
+    print("{any}\n", .{y});
+    try model.fp(X, y, res, err);
+    print("{any}\n", .{res});
+    print("{any}\n", .{y});
+    try model2.fp(X, y, res, err);
+    print("{any}\n", .{res});
 
     //try benchmarking(T, gpa, 100000);
 

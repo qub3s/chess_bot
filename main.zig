@@ -38,10 +38,6 @@ const Board_s = struct {
     pieces: [64]i32,
     white_to_move: bool,
 
-    pub fn nothing(self: Board_s) Board_s {
-        return self;
-    }
-
     pub fn possible_moves(board: *Board_s, list: *std.ArrayList(move)) !void {
         for (0..64) |i| {
             if (board.pieces[i] != 0 and ((board.white_to_move and board.pieces[i] < 7) or (!board.white_to_move and board.pieces[i] > 6))) {
@@ -311,6 +307,7 @@ const Board_s = struct {
         }
         return res;
     }
+
     pub fn make_move_m(board: *Board_s, pos: move) void {
         make_move(board, @intCast(pos.x1 + pos.y1 * 8), @intCast(pos.x2 + pos.y2 * 8));
     }
@@ -513,7 +510,7 @@ fn calc_min_move(engine: *nn.Network(nn_type), board: *Board_s) !nn_type {
 }
 
 fn play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s {
-    var pos_moves = std.ArrayList(move).init(gpa);
+    var pos_moves = try std.ArrayList(move).initCapacity(gpa, 100);
     defer pos_moves.deinit();
     try board.possible_moves(&pos_moves);
 
@@ -538,6 +535,9 @@ fn play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s
     }
 
     board.make_move_m(pos_moves.items[max]);
+
+    print("{}\n", .{max});
+
     return board.*;
 }
 
@@ -583,15 +583,17 @@ fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.Arra
     var errb = false;
 
     while (board.check_win() == 0 and num_move < 550) {
+        print("{any}\n", .{board.pieces});
         const rnd_num = rand.float(f32);
 
-        if (rnd_num < random) {
+        if (rnd_num <= random) {
             board = play_move_single_eval(engine, &board) catch |err| {
                 print("Error: {}\n", .{err});
                 errb = true;
                 break;
             };
         } else {
+            print("random", .{});
             make_random_move(&board) catch |err| {
                 print("Error: {}\n", .{err});
                 errb = true;
@@ -659,70 +661,11 @@ fn train(engine: *nn.Network(nn_type), result: *std.ArrayList(board_evaluation),
     }
 }
 
-fn model_competition(model_a: *nn.Network(nn_type), model_b: *nn.Network(nn_type), number_of_mirror_matchups: i32, random: f32) !void {
-    var winsa: f32 = 0;
-    var winsb: f32 = 0;
-
-    for (0..@intCast(number_of_mirror_matchups * 2)) |i| {
-        var board = Board_s.init();
-        var white_model: *nn.Network(nn_type) = undefined;
-        var black_model: *nn.Network(nn_type) = undefined;
-
-        if (i % 2 == 0) {
-            white_model = model_a;
-            black_model = model_b;
-        } else {
-            white_model = model_b;
-            black_model = model_a;
-        }
-
-        var num_move: i32 = 0;
-
-        while (board.check_win() == 0 and num_move < 400) {
-            const rnd_num = rand.float(f32);
-
-            if (rnd_num < random) {
-                if (i % 2 == 0) {
-                    board = try play_move_single_eval(white_model, &board);
-                } else {
-                    board = try play_move_single_eval(black_model, &board);
-                }
-            } else {
-                try make_random_move(&board);
-            }
-
-            num_move += 1;
-        }
-
-        const check_win = board.check_win();
-
-        if (check_win != 0) {
-            if (i % 2 == 0) {
-                if (check_win == 1) {
-                    winsa += 1;
-                } else {
-                    winsb += 1;
-                }
-            } else {
-                if (check_win == 1) {
-                    winsb += 1;
-                } else {
-                    winsa += 1;
-                }
-            }
-        } else {
-            winsa += 0.5;
-            winsb += 0.5;
-        }
-        print("Wins A: {}\n", .{winsa});
-        print("Wins B: {}\n", .{winsb});
-    }
-}
-
 fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
-    const threads = 12;
+    const threads = 2;
     const T = nn_type;
+
     const seed = 22;
     var model = nn.Network(T).init(allocator, true);
     try model.add_LinearLayer(768, 64, seed);
@@ -734,7 +677,7 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
 
     // create an stack of NNs that store the NNs for the threads
     var p: tpool.Pool = undefined;
-    p.init(allocator, 4);
+    p.init(allocator, threads);
 
     var network_stack = Thread_ArrayList.Thread_ArrayList(*nn.Network(T)).init(allocator);
 
@@ -745,7 +688,7 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
 
     var results = std.ArrayList(*std.ArrayList(board_evaluation)).init(allocator);
 
-    for (0..100) |i| {
+    for (0..20) |i| {
         print("Run: {}\n", .{i});
 
         const res = try allocator.create(std.ArrayList(board_evaluation));
@@ -753,7 +696,7 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
         try results.append(res);
 
         const mod = try network_stack.pop();
-        try p.spawn(play_engine_game, .{ mod, 0.5, results.items[results.items.len - 1], &network_stack });
+        try p.spawn(play_engine_game, .{ mod, 1, results.items[results.items.len - 1], &network_stack });
     }
     p.finish();
 
