@@ -2,10 +2,13 @@ const std = @import("std");
 const ray = @cImport({
     @cInclude("raylib.h");
 });
-const print = std.debug.print;
+
 const mem = @import("std").mem;
 const nn = @import("src/nn.zig");
 const tpool = @import("src/thread_pool.zig");
+const Thread_ArrayList = @import("src/Thread_ArrayList.zig");
+
+const print = std.debug.print;
 
 const nn_type = f32;
 const Error = error{
@@ -574,7 +577,7 @@ fn make_random_move(board: *Board_s) !void {
     board.make_move_m(pos_moves.items[rnd_i]);
 }
 
-fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation)) void {
+fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation), network_stack: *Thread_ArrayList.Thread_ArrayList(*nn.Network(nn_type))) void {
     var num_move: i32 = 0;
     var board = Board_s.init();
     var errb = false;
@@ -624,13 +627,7 @@ fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.Arra
             result.items[i].value = -res;
         }
     }
-
-    if (res == 0) {
-        print("removed\n", .{});
-        for (0..@intCast(num_move)) |_| {
-            _ = result.pop();
-        }
-    }
+    network_stack.append(engine) catch return;
 }
 
 fn train(engine: *nn.Network(nn_type), result: *std.ArrayList(board_evaluation), epochs: usize, lr: f32) !void {
@@ -724,6 +721,7 @@ fn model_competition(model_a: *nn.Network(nn_type), model_b: *nn.Network(nn_type
 
 fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
+    const threads = 12;
     const T = nn_type;
     const seed = 22;
     var model = nn.Network(T).init(allocator, true);
@@ -738,15 +736,28 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
     var p: tpool.Pool = undefined;
     p.init(allocator, 4);
 
+    var network_stack = Thread_ArrayList.Thread_ArrayList(*nn.Network(T)).init(allocator);
+
+    for (0..threads) |_| {
+        var append = try model.copy();
+        try network_stack.append(&append);
+    }
+
     var results = std.ArrayList(*std.ArrayList(board_evaluation)).init(allocator);
 
-    for (0..100) |_| {
-        var res = std.ArrayList(board_evaluation).init(allocator);
-        try results.append(&res);
-        try p.spawn(play_engine_game, .{ &model, 0.5, &res });
+    for (0..100) |i| {
+        print("Run: {}\n", .{i});
+
+        const res = try allocator.create(std.ArrayList(board_evaluation));
+        res.* = try std.ArrayList(board_evaluation).initCapacity(allocator, 550);
+        try results.append(res);
+
+        const mod = try network_stack.pop();
+        try p.spawn(play_engine_game, .{ mod, 0.5, results.items[results.items.len - 1], &network_stack });
     }
     p.finish();
 
+    print("done\n", .{});
     //try train(&model, &res, 50, 0.001);
     //try model.save("first_try.model");
 

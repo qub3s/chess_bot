@@ -72,10 +72,10 @@ pub fn LinearLayer(comptime T: type) type {
             const bias_cpy = try self.Allocator.alloc(T, self.outdim);
             const input_activations = try self.Allocator.alloc(T, self.indim);
 
-            const grad_weight = self.grad_weight.copy();
-            const grad_bias = self.grad_bias.copy();
+            const grad_weight = try self.grad_weight.copy();
+            const grad_bias = try self.grad_bias.copy();
 
-            return LinearLayer{ .indim = self.indim, .outdim = self.outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .grad_weight = grad_weight, .grad_bias = grad_bias, .Allocator = self.Allocator };
+            return LinearLayer(T){ .indim = self.indim, .outdim = self.outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .grad_weight = grad_weight, .grad_bias = grad_bias, .Allocator = self.Allocator };
         }
 
         pub fn deinit(self: @This()) void {
@@ -143,10 +143,10 @@ pub fn ActivationFunction(comptime T: type) type {
         Allocator: std.mem.Allocator,
 
         pub fn copy(self: *@This()) !ActivationFunction(T) {
-            const s = self.Allocator.alloc(T, self.s.len);
-            @memset(s, self.s);
+            const s = try self.Allocator.alloc(T, self.s.len);
+            @memcpy(s, self.s);
 
-            return LossFunction{ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
+            return ActivationFunction(T){ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
         }
 
         pub fn relu_fp(self: *@This(), input: []T, eval: bool) !void {
@@ -196,10 +196,10 @@ pub fn LossFunction(comptime T: type) type {
         }
 
         pub fn copy(self: *@This()) !LossFunction(T) {
-            const s = self.Allocator.alloc(T, self.s.len);
-            @memset(s, self.s);
+            const s = try self.Allocator.alloc(T, self.s.len);
+            @memcpy(s, self.s);
 
-            return LossFunction{ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
+            return LossFunction(T){ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
         }
 
         pub fn mse_fp(self: *@This(), res: []T, sol: []T, err: []T, eval: bool) !void {
@@ -263,16 +263,14 @@ pub fn AdamsOptimizer(comptime T: type) type {
         }
 
         pub fn copy(self: *@This()) !AdamsOptimizer(T) {
-            const grad = self.Allocator.alloc(T, self.grad.len);
+            const grad = try self.Allocator.alloc(T, self.grad.len);
             @memcpy(grad, self.grad);
-            const m = self.Allocator.alloc(T, self.m.len);
+            const m = try self.Allocator.alloc(T, self.m.len);
             @memcpy(m, self.m);
-            const v = self.Allocator.alloc(T, self.v.len);
+            const v = try self.Allocator.alloc(T, self.v.len);
             @memcpy(v, self.v);
-            const t = self.Allocator.alloc(T, self.t.len);
-            @memcpy(t, self.t);
 
-            return AdamsOptimizer{ .grad = grad, .m = m, .v = v, .t = t, .num_stored_grad = self.num_stored_grad, .Allocator = self.Allocator };
+            return AdamsOptimizer(T){ .grad = grad, .m = m, .v = v, .t = self.t, .num_stored_grad = self.num_stored_grad, .Allocator = self.Allocator };
         }
 
         pub fn deinit(self: *@This()) void {
@@ -321,15 +319,27 @@ pub fn Network(comptime T: type) type {
             return Network(T){ .layer = std.ArrayList(LayerType(T)).init(allocator), .Allocator = allocator, .eval = eval, .max_layer_size = 0, .allocation_field = undefined };
         }
 
-        pub fn copy(self: *@This()) Network(T) {
-            const layer = std.ArrayList(LayerType(T)).init(self.Allocator);
-            const allocation_field = self.Allocator.alloc(T, self.allocation_field);
+        pub fn copy(self: *@This()) !Network(T) {
+            var layer = std.ArrayList(LayerType(T)).init(self.Allocator);
+            const allocation_field = try self.Allocator.alloc(T, self.allocation_field.len);
 
             for (0..self.layer.items.len) |i| {
                 switch (self.layer.items[i]) {
-                    .linear => try layer.append(self.layer.items[i].linear.copy()),
-                    .activfunc => layer.append(self.layer.items[i].activfunc.copy()),
-                    .lossfunc => layer.append(self.layer.items[i].activfunc.copy()),
+                    .linear => blk: {
+                        const append = try self.layer.items[i].linear.copy();
+                        try layer.append(LayerType(T){ .linear = append });
+                        break :blk;
+                    },
+                    .activfunc => blk: {
+                        const append = try self.layer.items[i].activfunc.copy();
+                        try layer.append(LayerType(T){ .activfunc = append });
+                        break :blk;
+                    },
+                    .lossfunc => blk: {
+                        const append = try self.layer.items[i].lossfunc.copy();
+                        try layer.append(LayerType(T){ .lossfunc = append });
+                        break :blk;
+                    },
                 }
             }
 
