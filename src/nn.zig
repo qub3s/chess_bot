@@ -658,27 +658,33 @@ fn bench_fn(T: type, model: *Network(T), network_stack: *Thread_ArrayList.Thread
     var res = std.mem.zeroes([1]T);
     var err = std.mem.zeroes([1]T);
 
-    for (0..700) |_| {
+    for (0..100000) |_| {
         model.fp(&X, &y, &res, &err) catch return;
     }
 
-    //print("{any}\n", .{res});
-    //print("{any}\n", .{err});
     network_stack.append(model) catch return;
 }
 
 fn sleep() void {
     std.time.sleep(1000000000);
+    //1 - 20
+    //2 - 10
+    //3 - 7
+    //4 - 5
+    //5 - 4
+    //6 - 4
+    //7 - 3
 }
 
-pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
-    const threads = 8;
+pub fn benchmarking(gpa: std.mem.Allocator) !void {
+    const threads = 10;
+    const T = f32;
 
     const seed = 42;
     var model = Network(T).init(gpa, true);
-    try model.add_LinearLayer(768, 5000, seed);
-    try model.add_LinearLayer(5000, 500, seed);
-    try model.add_LinearLayer(500, 1, seed);
+    try model.add_LinearLayer(768, 256, seed);
+    try model.add_LinearLayer(256, 100, seed);
+    try model.add_LinearLayer(100, 1, seed);
 
     var p: tpool.Pool = undefined;
     p.init(gpa, threads);
@@ -686,14 +692,13 @@ pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
     var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
 
     print("done", .{});
-    for (0..threads * 2) |_| {
+
+    for (0..threads + 1) |_| {
         var append = try model.copy();
         try network_stack.append(&append);
     }
 
-    for (0..20) |i| {
-        print("Run: {}\n", .{i});
-
+    for (0..20) |_| {
         const mod = try network_stack.pop();
         try p.spawn(bench_fn, .{ T, mod, &network_stack });
         //try p.spawn(sleep, .{});
@@ -706,9 +711,9 @@ pub fn main() !void {
 
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
-    const T = f32;
+    //const T = f32;
 
-    try benchmarking(T, gpa);
+    try benchmarking(gpa);
 
     //try benchmarking(T, gpa, 100000);
 
