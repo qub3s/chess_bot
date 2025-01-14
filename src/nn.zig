@@ -2,6 +2,9 @@ const std = @import("std");
 const zcsv = @import("zcsv");
 const blas = @import("blas.zig");
 
+const tpool = @import("thread_pool.zig");
+const Thread_ArrayList = @import("Thread_ArrayList.zig");
+
 const print = std.debug.print;
 
 const NN_Error = error{
@@ -649,28 +652,53 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     }
 }
 
-pub fn benchmarking(T: type, gpa: std.mem.Allocator, iterations: u32) !void {
+fn bench_fn(T: type, model: *Network(T), network_stack: *Thread_ArrayList.Thread_ArrayList(*Network(T))) void {
+    var X = std.mem.zeroes([768]T);
+    var y = std.mem.zeroes([1]T);
+    var res = std.mem.zeroes([1]T);
+    var err = std.mem.zeroes([1]T);
+
+    for (0..700) |_| {
+        model.fp(&X, &y, &res, &err) catch return;
+    }
+
+    //print("{any}\n", .{res});
+    //print("{any}\n", .{err});
+    network_stack.append(model) catch return;
+}
+
+fn sleep() void {
+    std.time.sleep(1000000000);
+}
+
+pub fn benchmarking(T: type, gpa: std.mem.Allocator) !void {
+    const threads = 8;
+
     const seed = 42;
     var model = Network(T).init(gpa, true);
-    try model.add_LinearLayer(768, 250, seed);
-    try model.add_ReLu(250);
-    try model.add_LinearLayer(250, 32, seed);
-    try model.add_ReLu(32);
-    try model.add_LinearLayer(32, 1, seed);
+    try model.add_LinearLayer(768, 5000, seed);
+    try model.add_LinearLayer(5000, 500, seed);
+    try model.add_LinearLayer(500, 1, seed);
 
-    const X = try gpa.alloc(T, 768);
-    defer gpa.free(X);
-    const y = try gpa.alloc(T, 1);
-    defer gpa.free(y);
-    const res = try gpa.alloc(T, 1);
-    defer gpa.free(res);
-    const err = try gpa.alloc(T, 1);
-    defer gpa.free(err);
+    var p: tpool.Pool = undefined;
+    p.init(gpa, threads);
 
-    for (0..iterations) |_| {
-        X[iterations % 768] += 1;
-        try model.fp(X, y, res, err);
+    var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
+
+    print("done", .{});
+    for (0..threads * 2) |_| {
+        var append = try model.copy();
+        try network_stack.append(&append);
     }
+
+    for (0..20) |i| {
+        print("Run: {}\n", .{i});
+
+        const mod = try network_stack.pop();
+        try p.spawn(bench_fn, .{ T, mod, &network_stack });
+        //try p.spawn(sleep, .{});
+    }
+    p.finish();
 }
 
 pub fn main() !void {
@@ -680,31 +708,7 @@ pub fn main() !void {
     const gpa = general_purpose_alloc.allocator();
     const T = f32;
 
-    const seed = 42;
-    var model = Network(T).init(gpa, true);
-    try model.add_LinearLayer(768, 250, seed);
-    try model.add_ReLu(250);
-    try model.add_LinearLayer(250, 32, seed);
-    try model.add_ReLu(32);
-    try model.add_LinearLayer(32, 1, seed);
-
-    const X = try gpa.alloc(T, 768);
-    defer gpa.free(X);
-    const y = try gpa.alloc(T, 1);
-    defer gpa.free(y);
-    const res = try gpa.alloc(T, 1);
-    defer gpa.free(res);
-    const err = try gpa.alloc(T, 1);
-    defer gpa.free(err);
-
-    var model2 = try model.copy();
-
-    print("{any}\n", .{y});
-    try model.fp(X, y, res, err);
-    print("{any}\n", .{res});
-    print("{any}\n", .{y});
-    try model2.fp(X, y, res, err);
-    print("{any}\n", .{res});
+    try benchmarking(T, gpa);
 
     //try benchmarking(T, gpa, 100000);
 

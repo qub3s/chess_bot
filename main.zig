@@ -536,7 +536,7 @@ fn play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s
 
     board.make_move_m(pos_moves.items[max]);
 
-    print("{}\n", .{max});
+    //print("{}\n", .{max});
 
     return board.*;
 }
@@ -583,7 +583,7 @@ fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.Arra
     var errb = false;
 
     while (board.check_win() == 0 and num_move < 550) {
-        print("{any}\n", .{board.pieces});
+        //print("{any}\n", .{board.pieces});
         const rnd_num = rand.float(f32);
 
         if (rnd_num <= random) {
@@ -663,7 +663,7 @@ fn train(engine: *nn.Network(nn_type), result: *std.ArrayList(board_evaluation),
 
 fn stage_one_train(allocator: std.mem.Allocator) !void {
     // create model
-    const threads = 2;
+    const threads = 6;
     const T = nn_type;
 
     const seed = 22;
@@ -686,7 +686,7 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
         try network_stack.append(&append);
     }
 
-    var results = std.ArrayList(*std.ArrayList(board_evaluation)).init(allocator);
+    var results = try std.ArrayList(*std.ArrayList(board_evaluation)).initCapacity(allocator, 100);
 
     for (0..20) |i| {
         print("Run: {}\n", .{i});
