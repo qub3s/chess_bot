@@ -101,7 +101,9 @@ pub fn LinearLayer(comptime T: type) type {
                 @memcpy(self.input_activations, input);
             }
 
-            blas.gemv(T, self.outdim, self.indim, self.weight, false, input, self.bias_cpy, 1, 1);
+            // ONLY FOR BENCHMARKING
+            blas.mvmult(self.outdim, self.indim, self.weight, input, self.bias_cpy, self.bias_cpy);
+            //blas.gemv(T, self.outdim, self.indim, self.weight, false, input, self.bias_cpy, 1, 1);
 
             @memcpy(result, self.bias_cpy);
             @memcpy(self.bias_cpy, self.bias);
@@ -125,7 +127,10 @@ pub fn LinearLayer(comptime T: type) type {
             }
 
             @memset(result, 0);
-            blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
+
+            // ONLY FOR BENCHMARKING
+            blas.mvmult(self.outdim, self.indim, self.weight, input, result, result);
+            //blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
         }
 
         pub fn step(self: *@This(), lr: T) !void {
@@ -677,7 +682,7 @@ fn sleep() void {
 }
 
 pub fn benchmarking(gpa: std.mem.Allocator) !void {
-    const threads = 10;
+    const threads = 1;
     const T = f32;
 
     const seed = 42;
@@ -698,7 +703,8 @@ pub fn benchmarking(gpa: std.mem.Allocator) !void {
         try network_stack.append(&append);
     }
 
-    for (0..20) |_| {
+    for (0..10) |i| {
+        print("{}\n", .{i});
         const mod = try network_stack.pop();
         try p.spawn(bench_fn, .{ T, mod, &network_stack });
         //try p.spawn(sleep, .{});

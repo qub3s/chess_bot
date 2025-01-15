@@ -1,5 +1,6 @@
 const std = @import("std");
 const blas = @cImport(@cInclude("flexiblas/cblas.h"));
+const mv = @cImport(@cInclude("vm_mul.h"));
 
 const print = std.debug.print;
 
@@ -19,6 +20,13 @@ pub fn gemv(T: type, A_rows: usize, A_cols: usize, A: []T, trans_a: bool, V: []T
         f64 => blas.cblas_dgemv(blas.CblasColMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
         else => @compileError("Types outside of f32 and f64 are not supported"),
     }
+}
+
+//bool mat_vec_AVX2(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
+
+// res = mat*x + b
+pub fn mvmult(cols: usize, rows: usize, mat: []f32, x: []f32, b: []f32, res: []f32) void {
+    _ = mv.mat_vec_AVX2(@intCast(cols), @intCast(rows), mat.ptr, x.ptr, b.ptr, res.ptr);
 }
 
 pub fn main() !void {

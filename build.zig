@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
 
     exe.linkSystemLibrary("flexiblas");
     exe.linkSystemLibrary("raylib");
+    exe.addIncludePath(b.path("src/simd/"));
     exe.linkLibC();
 
     b.installArtifact(exe);
