@@ -1,10 +1,14 @@
 #include <immintrin.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <time.h> 
+#include <flexiblas/cblas.h>
+#include <string.h>
 
 // https://github.com/srinathv/ImproveHpc/blob/master/intel/2015-compilerSamples/C%2B%2B/intrinsic_samples/intrin_dot_sample.c
-bool mat_vec_AVX_2(int cols, int rows, float *matrix, float *vec, float *res){
+bool mat_vec_AVX2(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
     if( cols%8 != 0 || rows%8 != 0 ){
+        printf("break");
         return false;
     }
 
@@ -14,8 +18,8 @@ bool mat_vec_AVX_2(int cols, int rows, float *matrix, float *vec, float *res){
         sum = _mm256_setzero_ps();  
 
         for(int j = 0; j < rows; j += 8){
-            v_mat= _mm256_loadu_ps(matrix + cols * i + j);   
-            v_vec = _mm256_loadu_ps(vec + j);  
+            v_mat = _mm256_loadu_ps(matrix + cols * i + j);   
+            v_vec = _mm256_loadu_ps(vec_mul + j);  
             sum = _mm256_fmadd_ps(v_mat, v_vec, sum); 
         }
 
@@ -33,28 +37,95 @@ bool mat_vec_AVX_2(int cols, int rows, float *matrix, float *vec, float *res){
     return true;
 }
 
+bool naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
+    if( cols%8 != 0 || rows%8 != 0 ){
+        printf("break");
+        return false;
+    }
+
+    for( int i = 0; i < cols; i++){
+        for( int j = 0; j < rows; j++){
+            res[i] += vec_mul[j] * matrix[j + i * rows];
+        }
+        res[i] += vec_add[i];
+    }
+    return true;
+}
+
+void print(float *ptr, int width, int height){
+    printf("\n");
+
+    for(int h = 0; h < height; h++){
+        for(int w = 0; w < width; w++){
+            printf("%f  ", ptr[h*width+w]);
+        }
+        printf("\n");
+    }
+
+    printf("\n");
+}
+
+void reset_values(float *ptr,int values){
+    for(int h = 0; h < values; h++){
+        ptr[h] = (float) (h%3);
+    }
+}
+
 
 // Fill the arrays
 int main() {
     printf("compiled...\n");
 
-    float vec[8] = {};
-    float matrix[8*8] = {};
-    float res[8] = {};
+    int s = 100;
 
-    for(int x = 0; x < 8; x++){
-        vec[x] = x;
-    }
+    float *vec_mul;
+    float *vec_add;
+    vec_mul = malloc(s * sizeof(float));
+    vec_add = malloc(s * sizeof(float));
+    float *matrix;
+    matrix = malloc(s*s * sizeof(float));
+    float res[s] = {};
 
-    for(int x = 0; x < 64; x++){
-        matrix[x] = x;
-    }
+    // set values
+    reset_values(vec_mul, s);
+    //reset_values(vec_add, s);
+    reset_values(matrix, s*s);
 
-    mat_vec_AVX_2(8, 8, matrix, vec, res); 
+    clock_t t;
+    double time_taken;
 
-    for(int x = 0; x < 8; x++){
-        printf("%f \n", res[x]);
-    }
-    printf("\n");
+    t = clock(); 
 
+    cblas_sgemv(CblasColMajor, CblasTrans, s, s, 1, matrix, s, vec_mul, 1, 1, vec_add, 1 ); 
+    t = clock() - t; 
+    time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
+    printf("BLAS:  %f \n", time_taken);
+
+    //print(vec_add, 1, s);
+
+    // reset_values
+    reset_values(vec_add, s);
+
+    t = clock(); 
+    mat_vec_AVX2(s, s, matrix, vec_mul, vec_add, res); 
+    t = clock() - t; 
+    time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
+    printf("AVX2:  %f \n", time_taken);
+
+    //print(res, 1, s);
+    memset(res, (float)0, s);
+
+    // reset_values
+    reset_values(vec_mul, s);
+    reset_values(vec_add, s);
+    reset_values(matrix, s*s);
+
+    t = clock(); 
+    naive_algo(s, s, matrix, vec_mul, vec_add, res);
+    t = clock() - t; 
+    time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
+    printf("Naive: %f \n", time_taken);
+
+
+    //print(res, 1, s);
 }
