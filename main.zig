@@ -1,12 +1,12 @@
 const std = @import("std");
-const ray = @cImport({
-    @cInclude("raylib.h");
-});
-
 const mem = @import("std").mem;
 const nn = @import("src/nn.zig");
 const tpool = @import("src/thread_pool.zig");
 const Thread_ArrayList = @import("src/Thread_ArrayList.zig");
+
+const ray = @cImport({
+    @cInclude("raylib.h");
+});
 
 const print = std.debug.print;
 
