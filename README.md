@@ -3,6 +3,8 @@ Fedora:
 dnf install flexiblas flexiblas-devel
 switch to serial -> flexiblas default OPEN-BLAS-SERIAL 
 
+Compile always with -Doptimize=ReleaseFast
+
 
 ## DONE
 - Write Board visualization
