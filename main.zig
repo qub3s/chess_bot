@@ -14,7 +14,6 @@ const nn_type = f32;
 const Error = error{
     ErrorLogic,
 };
-
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = general_purpose_allocator.allocator();
 

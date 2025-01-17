@@ -663,7 +663,7 @@ fn bench_fn(T: type, model: *Network(T), network_stack: *Thread_ArrayList.Thread
     var res = std.mem.zeroes([1]T);
     var err = std.mem.zeroes([1]T);
 
-    for (0..100000) |_| {
+    for (0..10000) |_| {
         model.fp(&X, &y, &res, &err) catch return;
     }
 
@@ -682,28 +682,26 @@ fn sleep() void {
 }
 
 pub fn benchmarking(gpa: std.mem.Allocator) !void {
-    const threads = 1;
+    const threads = 10;
     const T = f32;
 
     const seed = 42;
     var model = Network(T).init(gpa, true);
     try model.add_LinearLayer(768, 256, seed);
-    try model.add_LinearLayer(256, 100, seed);
-    try model.add_LinearLayer(100, 1, seed);
+    try model.add_LinearLayer(256, 80, seed);
+    try model.add_LinearLayer(80, 1, seed);
 
     var p: tpool.Pool = undefined;
     p.init(gpa, threads);
 
     var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
 
-    print("done", .{});
-
     for (0..threads + 1) |_| {
         var append = try model.copy();
         try network_stack.append(&append);
     }
 
-    for (0..10) |i| {
+    for (0..30) |i| {
         print("{}\n", .{i});
         const mod = try network_stack.pop();
         try p.spawn(bench_fn, .{ T, mod, &network_stack });
