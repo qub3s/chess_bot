@@ -72,10 +72,13 @@ pub fn LinearLayer(comptime T: type) type {
         pub fn copy(self: *@This()) !LinearLayer(T) {
             const weight = try self.Allocator.alloc(T, self.indim * self.outdim);
             @memcpy(weight, self.weight);
+
             const bias = try self.Allocator.alloc(T, self.outdim);
             @memcpy(bias, self.bias);
+
             const bias_cpy = try self.Allocator.alloc(T, self.outdim);
             @memcpy(bias_cpy, self.bias_cpy);
+
             const input_activations = try self.Allocator.alloc(T, self.indim);
             @memcpy(input_activations, self.input_activations);
 
@@ -85,10 +88,14 @@ pub fn LinearLayer(comptime T: type) type {
             return LinearLayer(T){ .indim = self.indim, .outdim = self.outdim, .weight = weight, .bias = bias, .bias_cpy = bias_cpy, .input_activations = input_activations, .grad_weight = grad_weight, .grad_bias = grad_bias, .Allocator = self.Allocator };
         }
 
-        pub fn deinit(self: @This()) void {
+        pub fn free(self: *@This()) void {
             self.Allocator.free(self.weight);
             self.Allocator.free(self.bias);
             self.Allocator.free(self.bias_cpy);
+            self.Allocator.free(self.input_activations);
+
+            self.grad_weight.free();
+            self.grad_bias.free();
         }
 
         // foreward pass
@@ -102,7 +109,7 @@ pub fn LinearLayer(comptime T: type) type {
             }
 
             // ONLY FOR BENCHMARKING
-            blas.mvmult(self.outdim, self.indim, self.weight, input, self.bias_cpy, self.bias_cpy);
+            blas.mvmult(self.outdim, self.indim, self.weight, input, self.bias, self.bias_cpy);
             //blas.gemv(T, self.outdim, self.indim, self.weight, false, input, self.bias_cpy, 1, 1);
 
             @memcpy(result, self.bias_cpy);
@@ -129,8 +136,8 @@ pub fn LinearLayer(comptime T: type) type {
             @memset(result, 0);
 
             // ONLY FOR BENCHMARKING
-            blas.mvmult(self.outdim, self.indim, self.weight, input, result, result);
-            //blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
+            //blas.mvmult(self.outdim, self.indim, self.weight, input, self.bias, result);
+            blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
         }
 
         pub fn step(self: *@This(), lr: T) !void {
@@ -159,6 +166,10 @@ pub fn ActivationFunction(comptime T: type) type {
             @memcpy(s, self.s);
 
             return ActivationFunction(T){ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
+        }
+
+        pub fn free(self: *@This()) void {
+            self.Allocator.free(self.s);
         }
 
         pub fn relu_fp(self: *@This(), input: []T, eval: bool) !void {
@@ -212,6 +223,10 @@ pub fn LossFunction(comptime T: type) type {
             @memcpy(s, self.s);
 
             return LossFunction(T){ .type_ = self.type_, .s = s, .Allocator = self.Allocator };
+        }
+
+        pub fn free(self: *@This()) void {
+            self.Allocator.free(self.s);
         }
 
         pub fn mse_fp(self: *@This(), res: []T, sol: []T, err: []T, eval: bool) !void {
@@ -274,6 +289,12 @@ pub fn AdamsOptimizer(comptime T: type) type {
             return AdamsOptimizer(T){ .grad = grad, .m = m, .v = v, .t = t, .num_stored_grad = num_stored_grad, .Allocator = Allocator };
         }
 
+        pub fn free(self: *@This()) void {
+            self.Allocator.free(self.grad);
+            self.Allocator.free(self.m);
+            self.Allocator.free(self.v);
+        }
+
         pub fn copy(self: *@This()) !AdamsOptimizer(T) {
             const grad = try self.Allocator.alloc(T, self.grad.len);
             @memcpy(grad, self.grad);
@@ -331,7 +352,7 @@ pub fn Network(comptime T: type) type {
             return Network(T){ .layer = std.ArrayList(LayerType(T)).init(allocator), .Allocator = allocator, .eval = eval, .max_layer_size = 0, .allocation_field = undefined };
         }
 
-        pub fn copy(self: *@This()) !Network(T) {
+        pub fn copy(self: *@This(), net: *Network(T)) !void {
             var layer = std.ArrayList(LayerType(T)).init(self.Allocator);
             const allocation_field = try self.Allocator.alloc(T, self.allocation_field.len);
 
@@ -355,7 +376,24 @@ pub fn Network(comptime T: type) type {
                 }
             }
 
-            return Network(T){ .layer = layer, .Allocator = self.Allocator, .eval = self.eval, .max_layer_size = self.max_layer_size, .allocation_field = allocation_field };
+            net.layer = layer;
+            net.Allocator = self.Allocator;
+            net.eval = self.eval;
+            net.max_layer_size = self.max_layer_size;
+            net.allocation_field = allocation_field;
+            return;
+        }
+
+        pub fn free(self: *@This()) void {
+            for (0..self.layer.items.len) |i| {
+                switch (self.layer.items[i]) {
+                    .linear => self.layer.items[i].linear.free(),
+                    .lossfunc => self.layer.items[i].lossfunc.free(),
+                    .activfunc => self.layer.items[i].activfunc.free(),
+                }
+            }
+            defer self.layer.deinit();
+            self.Allocator.free(self.allocation_field);
         }
 
         pub fn add_LinearLayer(self: *@This(), indim: usize, outdim: usize, rnd: u64) !void {
@@ -391,6 +429,7 @@ pub fn Network(comptime T: type) type {
             for (0..self.layer.items.len) |i| {
                 LayerInput = switch (self.layer.items[i]) {
                     .linear => blk: {
+                        print("{any}\n\n\n", .{self.allocation_field[0..10]});
                         try self.layer.items[i].linear.fp(LayerInput, self.allocation_field[0..self.layer.items[i].linear.outdim], self.eval);
                         break :blk self.allocation_field[0..self.layer.items[i].linear.outdim];
                     },
@@ -663,7 +702,7 @@ fn bench_fn(T: type, model: *Network(T), network_stack: *Thread_ArrayList.Thread
     var res = std.mem.zeroes([1]T);
     var err = std.mem.zeroes([1]T);
 
-    for (0..10000) |_| {
+    for (0..1000) |_| {
         model.fp(&X, &y, &res, &err) catch return;
     }
 
@@ -671,7 +710,7 @@ fn bench_fn(T: type, model: *Network(T), network_stack: *Thread_ArrayList.Thread
 }
 
 fn sleep() void {
-    std.time.sleep(1000000000);
+    std.time.sleep(10000);
     //1 - 20
     //2 - 10
     //3 - 7
@@ -681,43 +720,76 @@ fn sleep() void {
     //7 - 3
 }
 
-pub fn benchmarking(gpa: std.mem.Allocator) !void {
-    const threads = 10;
-    const T = f32;
-
-    const seed = 42;
-    var model = Network(T).init(gpa, true);
-    try model.add_LinearLayer(768, 256, seed);
-    try model.add_LinearLayer(256, 80, seed);
-    try model.add_LinearLayer(80, 1, seed);
-
-    var p: tpool.Pool = undefined;
-    p.init(gpa, threads);
-
-    var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
-
-    for (0..threads + 1) |_| {
-        var append = try model.copy();
-        try network_stack.append(&append);
-    }
-
-    for (0..30) |i| {
-        print("{}\n", .{i});
-        const mod = try network_stack.pop();
-        try p.spawn(bench_fn, .{ T, mod, &network_stack });
-        //try p.spawn(sleep, .{});
-    }
-    p.finish();
-}
+//pub fn benchmarking(gpa: std.mem.Allocator) !void {
+//    const threads = 2;
+//    const T = f32;
+//
+//    const seed = 42;
+//    var model = Network(T).init(gpa, true);
+//    try model.add_LinearLayer(768, 256, seed);
+//    try model.add_LinearLayer(256, 80, seed);
+//    try model.add_LinearLayer(80, 1, seed);
+//
+//    var p: tpool.Pool = undefined;
+//    p.init(gpa, threads);
+//
+//    var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
+//
+//    for (0..threads * 4) |_| {
+//        var append = try model.copy();
+//        try network_stack.append(&append);
+//    }
+//
+//    print("start\n", .{});
+//    const start = std.time.microTimestamp();
+//
+//    for (0..24) |i| {
+//        print("{}\n", .{i});
+//        const mod = try network_stack.pop();
+//        try p.spawn(bench_fn, .{ T, mod, &network_stack });
+//        //try p.spawn(sleep, .{});
+//    }
+//    p.finish();
+//    const end = std.time.microTimestamp();
+//    print("{}\n", .{(end - start)});
+//}
 
 pub fn main() !void {
     print("compiles... \n", .{});
 
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
-    //const T = f32;
+    const T = f32;
 
-    try benchmarking(gpa);
+    //try benchmarking(gpa);
+
+    const seed = 42;
+    var model = Network(T).init(gpa, true);
+    try model.add_LinearLayer(768, 8, seed);
+    try model.add_LinearLayer(8, 8, seed);
+    try model.add_LinearLayer(8, 1, seed);
+
+    const append: *Network(T) = try gpa.create(Network(T));
+    try model.copy(append);
+
+    var X = std.mem.zeroes([768]T);
+    var y = std.mem.zeroes([1]T);
+    var res = std.mem.zeroes([1]T);
+    var err = std.mem.zeroes([1]T);
+
+    const repeat = 1;
+
+    for (0..repeat) |_| {
+        model.fp(&X, &y, &res, &err) catch return;
+        print("{any}\n", .{res});
+    }
+
+    print("\n\n\n", .{});
+
+    for (0..repeat) |_| {
+        append.fp(&X, &y, &res, &err) catch return;
+        print("{any}\n", .{res});
+    }
 
     //try benchmarking(T, gpa, 100000);
 

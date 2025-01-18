@@ -69,7 +69,6 @@ pub fn spawn(pool: *Pool, comptime func: anytype, args: anytype) !void {
 
     if (pool.number_of_workers < pool.max_number_of_workers) {
         const w_thread = try std.Thread.spawn(pool.spawn_config, worker, .{pool});
-        //print("created worker thread \n", .{});
         w_thread.detach();
         pool.number_of_workers += 1;
         pool.run_control();
@@ -87,6 +86,7 @@ fn worker(pool: *Pool) void {
             pool.number_of_workers -= 1;
             pool.run_control();
             pool.mutex_ressources.unlock();
+            print("worker killed!\n", .{});
             return;
         }
 

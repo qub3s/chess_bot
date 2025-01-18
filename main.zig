@@ -20,6 +20,8 @@ const gpa = general_purpose_allocator.allocator();
 var rnd = std.rand.DefaultPrng.init(0);
 var rand = rnd.random();
 
+const max_game_len: usize = 300;
+
 // board colors
 const black_color: u32 = 0xf0d9b5ff;
 const white_color: u32 = 0xb58863ff;
@@ -207,6 +209,21 @@ const Board_s = struct {
         self.pieces[@intCast(y * 8 + x)] = value;
     }
 
+    pub fn checkmate_next_move(self: *Board_s) !bool {
+        var pos_moves = std.ArrayList(move).init(gpa);
+        defer pos_moves.deinit();
+        try self.possible_moves(&pos_moves);
+
+        for (0..pos_moves.items.len) |i| {
+            var move_to_eval = self.copy();
+            move_to_eval.make_move_m(pos_moves.items[i]);
+            if (move_to_eval.check_win() != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     pub fn get(self: *const Board_s, x: i32, y: i32) i32 {
         return self.pieces[@intCast(y * 8 + x)];
     }
@@ -248,6 +265,30 @@ const Board_s = struct {
         @memcpy(copy_pieces[0..64], self.pieces[0..64]);
 
         return Board_s{ .white_castled = self.white_castled, .black_castled = self.black_castled, .pieces = copy_pieces, .white_to_move = self.white_to_move };
+    }
+
+    fn get_board_768(p64: [64]i32, p768: *[768]nn_type) void {
+        for (0..768) |i| {
+            if (p64[i % 64] == 1 + i / 64) {
+                p768[i] = 1;
+            } else {
+                p768[i] = 0;
+            }
+        }
+    }
+
+    pub fn get_input(self: Board_s, p768: *[768]f32) void {
+        var flipped_board = mem.zeroes([64]i32);
+
+        if (self.white_to_move) {
+            for (0..self.pieces.len) |i| {
+                flipped_board[i] = self.pieces[i];
+            }
+        } else {
+            self.inverse_board(&flipped_board);
+        }
+
+        get_board_768(flipped_board, p768);
     }
 
     //TODO change the value of the pieces
@@ -328,24 +369,6 @@ const Board_s = struct {
         board.white_to_move = board.white_to_move == false;
     }
 };
-
-fn get_board_768(p64: [64]i32, p768: *[768]nn_type) void {
-    for (0..768) |i| {
-        if (p64[i % 64] == 1 + i / 64) {
-            p768[i] = 1;
-        } else {
-            p768[i] = 0;
-        }
-    }
-}
-
-fn load_piece_textures() !void {
-    const names: [12][]const u8 = .{ "images/pieces/kl.png", "images/pieces/ql.png", "images/pieces/rl.png", "images/pieces/bl.png", "images/pieces/nl.png", "images/pieces/pl.png", "images/pieces/kd.png", "images/pieces/qd.png", "images/pieces/rd.png", "images/pieces/bd.png", "images/pieces/nd.png", "images/pieces/pd.png" };
-
-    for (0..names.len) |x| {
-        textures_pieces[x] = ray.LoadTexture(names[x].ptr);
-    }
-}
 
 fn visualize(board: *Board_s, size: i32) !void {
     const white_board_tile_color = ray.GetColor(white_color);
@@ -450,21 +473,15 @@ fn visualize(board: *Board_s, size: i32) !void {
     }
 }
 
-fn get_input(board: Board_s, p768: *[768]f32) void {
-    var flipped_board = mem.zeroes([64]i32);
+fn load_piece_textures() !void {
+    const names: [12][]const u8 = .{ "images/pieces/kl.png", "images/pieces/ql.png", "images/pieces/rl.png", "images/pieces/bl.png", "images/pieces/nl.png", "images/pieces/pl.png", "images/pieces/kd.png", "images/pieces/qd.png", "images/pieces/rd.png", "images/pieces/bd.png", "images/pieces/nd.png", "images/pieces/pd.png" };
 
-    if (board.white_to_move) {
-        for (0..board.pieces.len) |i| {
-            flipped_board[i] = board.pieces[i];
-        }
-    } else {
-        board.inverse_board(&flipped_board);
+    for (0..names.len) |x| {
+        textures_pieces[x] = ray.LoadTexture(names[x].ptr);
     }
-
-    get_board_768(flipped_board, p768);
 }
 
-fn eval_single_board_position(board: Board_s, model: *nn.Network(nn_type)) !nn_type {
+fn eval_board(board: Board_s, model: *nn.Network(nn_type)) !nn_type {
     var input = mem.zeroes([768]nn_type);
     var sol = mem.zeroes([1]nn_type);
     var result = mem.zeroes([1]nn_type);
@@ -475,12 +492,12 @@ fn eval_single_board_position(board: Board_s, model: *nn.Network(nn_type)) !nn_t
         return std.math.inf(nn_type);
     }
 
-    get_input(board, &input);
+    board.get_input(&input);
     try model.fp(&input, &sol, &result, &err);
     return result[0];
 }
 
-fn calc_min_move(engine: *nn.Network(nn_type), board: *Board_s) !nn_type {
+fn two_mm_calc_min_move(engine: *nn.Network(nn_type), board: *Board_s) !nn_type {
     var pos_moves = std.ArrayList(move).init(gpa);
     defer pos_moves.deinit();
     try board.possible_moves(&pos_moves);
@@ -496,7 +513,7 @@ fn calc_min_move(engine: *nn.Network(nn_type), board: *Board_s) !nn_type {
         if (move_to_eval.check_win() != 0) {
             val = -std.math.inf(nn_type);
         } else {
-            val = try eval_single_board_position(move_to_eval, engine);
+            val = try eval_board(move_to_eval, engine);
         }
 
         if (val < min_value) {
@@ -508,7 +525,7 @@ fn calc_min_move(engine: *nn.Network(nn_type), board: *Board_s) !nn_type {
     return min_value;
 }
 
-fn play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s {
+fn two_mm_play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s {
     var pos_moves = try std.ArrayList(move).initCapacity(gpa, 100);
     defer pos_moves.deinit();
     try board.possible_moves(&pos_moves);
@@ -524,7 +541,7 @@ fn play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s
         if (move_to_eval.check_win() != 0) {
             val = std.math.inf(nn_type);
         } else {
-            val = try calc_min_move(engine, &move_to_eval);
+            val = try two_mm_calc_min_move(engine, &move_to_eval);
         }
 
         if (val > max_value) {
@@ -535,28 +552,10 @@ fn play_move_single_eval(engine: *nn.Network(nn_type), board: *Board_s) !Board_s
 
     board.make_move_m(pos_moves.items[max]);
 
-    //print("{}\n", .{max});
-
     return board.*;
 }
 
-fn checkmate_next_move(board: *Board_s) !bool {
-    var pos_moves = std.ArrayList(move).init(gpa);
-    defer pos_moves.deinit();
-    try board.possible_moves(&pos_moves);
-
-    for (0..pos_moves.items.len) |i| {
-        var move_to_eval = board.copy();
-        move_to_eval.make_move_m(pos_moves.items[i]);
-        if (move_to_eval.check_win() != 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-fn make_random_move(board: *Board_s) !void {
+fn two_mm_make_random_move(board: *Board_s) !void {
     var pos_moves = std.ArrayList(move).init(gpa);
     defer pos_moves.deinit();
     try board.possible_moves(&pos_moves);
@@ -566,7 +565,7 @@ fn make_random_move(board: *Board_s) !void {
         const rnd_i = rand.intRangeAtMost(usize, 0, pos_moves.items.len - 1);
         newboard.make_move_m(pos_moves.items[rnd_i]);
 
-        if (!try checkmate_next_move(&newboard)) {
+        if (!try newboard.checkmate_next_move()) {
             board.make_move_m(pos_moves.items[rnd_i]);
             return;
         }
@@ -576,7 +575,7 @@ fn make_random_move(board: *Board_s) !void {
     board.make_move_m(pos_moves.items[rnd_i]);
 }
 
-fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation), network_stack: *Thread_ArrayList.Thread_ArrayList(*nn.Network(nn_type))) void {
+fn two_mm_play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.ArrayList(board_evaluation), network_stack: *Thread_ArrayList.Thread_ArrayList(*nn.Network(nn_type))) void {
     var num_move: i32 = 0;
     var board = Board_s.init();
     var errb = false;
@@ -586,14 +585,14 @@ fn play_engine_game(engine: *nn.Network(nn_type), random: f32, result: *std.Arra
         const rnd_num = rand.float(f32);
 
         if (rnd_num <= random) {
-            board = play_move_single_eval(engine, &board) catch |err| {
+            board = two_mm_play_move_single_eval(engine, &board) catch |err| {
                 print("Error: {}\n", .{err});
                 errb = true;
                 break;
             };
         } else {
             print("random", .{});
-            make_random_move(&board) catch |err| {
+            two_mm_make_random_move(&board) catch |err| {
                 print("Error: {}\n", .{err});
                 errb = true;
                 break;
@@ -639,7 +638,7 @@ fn train(engine: *nn.Network(nn_type), result: *std.ArrayList(board_evaluation),
     for (0..batchsize * epochs) |i| {
         const sample = rand.intRangeAtMost(usize, 0, batchsize - 1);
         var X = std.mem.zeroes([768]nn_type);
-        get_input(result.items[sample].board, &X);
+        result.items[sample].board.get_input(&X);
 
         var y: [1]nn_type = undefined;
         y[0] = result.items[sample].value;
@@ -660,13 +659,62 @@ fn train(engine: *nn.Network(nn_type), result: *std.ArrayList(board_evaluation),
     }
 }
 
-fn stage_one_train(allocator: std.mem.Allocator) !void {
-    // create model
-    const threads = 6;
-    const T = nn_type;
+fn two_mm_train(T: type, allocator: std.mem.Allocator, engine: *nn.Network(nn_type), threads: u32, train_runs: u32, games_per_train_run: u32) !void {
+    var network_stack = Thread_ArrayList.Thread_ArrayList(*nn.Network(T)).init(allocator);
 
+    var p: tpool.Pool = undefined;
+    p.init(allocator, threads);
+
+    // create model copies
+    for (0..threads * 2) |_| {
+        const append: *nn.Network(T) = try allocator.create(nn.Network(T));
+
+        try engine.copy(append);
+
+        std.debug.print("append: {*}\n", .{append});
+        try network_stack.append(append);
+    }
+
+    for (0..train_runs) |_| {
+        var results = std.ArrayList(*std.ArrayList(board_evaluation)).init(allocator);
+        defer results.deinit();
+
+        // collect the games
+        for (0..games_per_train_run) |_| {
+            const res = try allocator.create(std.ArrayList(board_evaluation));
+            res.* = try std.ArrayList(board_evaluation).initCapacity(allocator, max_game_len);
+            try results.append(res);
+
+            const mod = try network_stack.pop();
+            try p.spawn(two_mm_play_engine_game, .{ mod, 1, results.items[results.items.len - 1], &network_stack });
+        }
+        p.finish();
+
+        // delete the model copies
+        while (network_stack.list.items.len != 0) {
+            const deinit = network_stack.list.items[network_stack.list.items.len - 1];
+            deinit.free();
+        }
+
+        var unify = std.ArrayList(board_evaluation).init(allocator);
+
+        for (results.items) |res| {
+            try unify.appendSlice(res.items);
+            res.deinit();
+        }
+
+        // train
+    }
+
+    return;
+}
+
+pub fn main() !void {
+    print("compiles...\n", .{});
+
+    const T: type = f32;
     const seed = 22;
-    var model = nn.Network(T).init(allocator, true);
+    var model = nn.Network(T).init(gpa, true);
     try model.add_LinearLayer(768, 64, seed);
     try model.add_ReLu(64);
     try model.add_LinearLayer(64, 32, seed);
@@ -674,65 +722,20 @@ fn stage_one_train(allocator: std.mem.Allocator) !void {
     try model.add_LinearLayer(32, 1, seed);
     try model.add_MSE(1);
 
-    // create an stack of NNs that store the NNs for the threads
-    var p: tpool.Pool = undefined;
-    p.init(allocator, threads);
-
-    var network_stack = Thread_ArrayList.Thread_ArrayList(*nn.Network(T)).init(allocator);
-
-    for (0..threads) |_| {
-        var append = try model.copy();
-        try network_stack.append(&append);
-    }
-
-    var results = try std.ArrayList(*std.ArrayList(board_evaluation)).initCapacity(allocator, 100);
-
-    for (0..20) |i| {
-        print("Run: {}\n", .{i});
-
-        const res = try allocator.create(std.ArrayList(board_evaluation));
-        res.* = try std.ArrayList(board_evaluation).initCapacity(allocator, 550);
-        try results.append(res);
-
-        const mod = try network_stack.pop();
-        try p.spawn(play_engine_game, .{ mod, 1, results.items[results.items.len - 1], &network_stack });
-    }
-    p.finish();
-
-    print("done\n", .{});
-    //try train(&model, &res, 50, 0.001);
-    //try model.save("first_try.model");
-
-    return;
-}
-
-pub fn main() !void {
-    print("compiles...\n", .{});
+    const threads = 6;
+    try two_mm_train(T, gpa, &model, threads, 1, 1000);
     //const screenWidth = 1000;
     //const screenHeight = 1000;
     //const tile_size = 125;
 
     // declare allocator
-    var board = Board_s.init();
-    board.white_castled = true;
     //ray.InitWindow(screenWidth, screenHeight, "");
     //defer ray.CloseWindow();
 
     //ray.SetTargetFPS(30);
 
     //try load_piece_textures();
-    try stage_one_train(gpa);
-
-    //const T = nn_type;
-    //const seed = 22;
-    //var model = nn.Network(T){ .layer = std.ArrayList(nn.LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
-    //try model.add_LinearLayer(768, 64, seed);
-    //try model.add_ReLu(64);
-    //try model.add_LinearLayer(64, 32, seed);
-    //try model.add_ReLu(32);
-    //try model.add_LinearLayer(32, 1, seed);
-    //try model.add_MSE(1);
-    //try model.load("first_try.model");
+    //try stage_one_train(gpa);
 
     //var model1 = nn.Network(T){ .layer = std.ArrayList(nn.LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
     //try model1.add_LinearLayer(768, 64, seed);
