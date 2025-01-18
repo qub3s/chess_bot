@@ -634,17 +634,17 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
 }
 
 pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
-    const num_batches = 10; //2000;
+    const num_batches = 100;
     const batchsize = 100;
-    const lr = 0.001;
+    const lr = 0.01;
 
     const inp1 = 784;
-    const inp2 = 100;
-    const out1 = 100;
+    const inp2 = 80;
+    const out1 = 80;
     const out2 = 1;
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
-    var net = Network(T).init(std.ArrayList(LayerType(T)).init(gpa), gpa, false);
+    var net = Network(T).init(gpa, false);
     try net.add_LinearLayer(inp1, out1, 64);
     try net.add_ReLu(inp2);
     try net.add_LinearLayer(inp2, out2, 32);
@@ -760,8 +760,6 @@ pub fn main() !void {
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
     const T = f32;
-
-    //try benchmarking(gpa);
 
     const seed = 42;
     var model = Network(T).init(gpa, true);

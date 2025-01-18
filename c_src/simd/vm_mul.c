@@ -6,7 +6,6 @@
 void naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
     for( int i = 0; i < rows; i++){
         for( int j = 0; j < cols; j++){
-            res[i] += vec_mul[j] * matrix[j + i * cols];
         }
         res[i] += vec_add[i];
     }
@@ -66,10 +65,12 @@ void reset_values(float *ptr,int values){
     }
 }
 
+
+// Fill the arrays
 //int main() {
 //    printf("compiled...\n");
-//    int cols = 8;
-//    int rows = 16;
+//    int s1 = 8;
+//    int s2 = 16;
 //
 //    float *vec_mul; 
 //    float *vec_add; 
@@ -121,4 +122,16 @@ void reset_values(float *ptr,int values){
 //    naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
 //
 //    print(res, 1, rows);
+//    //// reset_values
+//    //reset_values(vec_mul, s1);
+//    //reset_values(vec_add, s1);
+//    //reset_values(matrix, s1*s2);
+//
+//    //t = clock(); 
+//    //naive_algo(s1, s2, matrix, vec_mul, vec_add, res);
+//    //t = clock() - t; 
+//    //time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
+//    //printf("Naive: %f \n", time_taken);
+//
+//    //print(res, 1, s1);
 //}

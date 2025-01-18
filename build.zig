@@ -26,6 +26,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const zcsv = b.dependency("zcsv", .{
+        .target = b.host,
+    });
+    exe.root_module.addImport("zcsv", zcsv.module("zcsv"));
+
     exe.linkLibrary(simd);
     exe.linkSystemLibrary("flexiblas");
     exe.linkSystemLibrary("raylib");
