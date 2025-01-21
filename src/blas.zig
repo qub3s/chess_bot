@@ -16,14 +16,18 @@ pub fn gemv(T: type, A_rows: usize, A_cols: usize, A: []T, trans_a: bool, V: []T
     const transpose_a = if (trans_a) blas.CblasTrans else blas.CblasNoTrans;
 
     switch (T) {
-        f32 => blas.cblas_sgemv(blas.CblasColMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
-        f64 => blas.cblas_dgemv(blas.CblasColMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_rows), V.ptr, 1, beta, Y.ptr, 1),
+        f32 => blas.cblas_sgemv(blas.CblasRowMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_cols), V.ptr, 1, beta, Y.ptr, 1),
+        f64 => blas.cblas_dgemv(blas.CblasRowMajor, @intCast(transpose_a), @intCast(A_rows), @intCast(A_cols), alpha, A.ptr, @intCast(A_cols), V.ptr, 1, beta, Y.ptr, 1),
         else => @compileError("Types outside of f32 and f64 are not supported"),
     }
 }
 
-pub fn mvmult(rows: usize, cols: usize, mat: []f32, x: []f32, b: []f32, res: []f32) void {
-    if (cols % 8 == 0 or rows % 8 == 0) {
+pub fn mvmult(rows: usize, cols: usize, trans_mat: bool, mat: []f32, x: []f32, b: []f32, res: []f32) void {
+    if (trans_mat) {
+        mvmultc.trans_naive_algo(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
+    }
+
+    if (cols % 8 != 0 or rows % 8 != 0) {
         mvmultc.naive_algo(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
     } else {
         mvmultc.mat_vec_AVX2(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);

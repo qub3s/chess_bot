@@ -2,12 +2,25 @@
 #include <stdio.h> 
 #include <time.h> 
 #include <flexiblas/cblas.h>
+#include <math.h>
+#include <stdbool.h>
 
 void naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
     for( int i = 0; i < rows; i++){
+        res[i] = vec_add[i];
         for( int j = 0; j < cols; j++){
+            res[i] += vec_mul[j] * matrix[j + i * rows];
         }
-        res[i] += vec_add[i];
+    }
+    return;
+}
+
+void trans_naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
+    for( int i = 0; i < rows; i++){
+        res[i] = vec_add[i];
+        for( int j = 0; j < cols; j++){
+            res[i] += vec_mul[j] * matrix[j * rows + i];
+        }
     }
     return;
 }
@@ -15,8 +28,8 @@ void naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mu
 // https://github.com/srinathv/ImproveHpc/blob/master/intel/2015-compilerSamples/C%2B%2B/intrinsic_samples/intrin_dot_sample.c
 void mat_vec_AVX2(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
     if( cols%8 != 0 || rows%8 != 0){
-        printf("Dimensions not allowed: %d - %d\n", cols, rows);
-        return ;
+        printf("overflow\n");
+        return naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
     }
 
     __m256 v_mat, v_vec, sum;
@@ -61,16 +74,34 @@ void print(float *ptr, int width, int height){
 
 void reset_values(float *ptr,int values){
     for(int h = 0; h < values; h++){
-        ptr[h] = (float) (h%7);
+        ptr[h] = fmodf(h /3.1415, 1);
+        //ptr[h] = h ;
     }
 }
 
+int check_same(int len, float *ptr_a, float *ptr_b){
+    for(int x = 0; x < len; x++){
+        if(ptr_a[x] != ptr_b[x]){
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void print_bool(int x){
+    if(x == 1){
+        printf("True\n");
+    }
+    else{
+        printf("False\n");
+    }
+}
 
 // Fill the arrays
 //int main() {
 //    printf("compiled...\n");
-//    int s1 = 8;
-//    int s2 = 16;
+//    int rows = 16;
+//    int cols = 8;
 //
 //    float *vec_mul; 
 //    float *vec_add; 
@@ -79,59 +110,46 @@ void reset_values(float *ptr,int values){
 //
 //    float *matrix;
 //    matrix = malloc(rows * cols * sizeof(float));
-//    float res[rows] = {};
+//
+//    float res_blas[rows] = {};
+//    float res_avx[rows] = {};
+//    float res_naive[rows] = {};
 //
 //    // set values
 //    reset_values(vec_mul, cols);
 //    reset_values(vec_add, rows);
 //    reset_values(matrix, rows*cols);
 //
-//    clock_t t;
-//    double time_taken;
+//    cblas_sgemv(CblasColMajor, CblasNoTrans, rows, cols, 1, matrix, rows, vec_mul, 1, 1, vec_add, 1 ); 
 //
-//    t = clock(); 
-//    cblas_sgemv(CblasColMajor, CblasTrans, cols, rows, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
-//    t = clock() - t; 
-//    time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
-//    //printf("BLAS:  %f \n", time_taken);
+//    for(int x = 0; x < rows; x++){
+//        res_blas[x] = vec_add[x];
+//    }
 //
-//    print(vec_add, 1, rows);
+//    print(res_blas, rows, 1);
 //
 //    // reset_values
 //    reset_values(vec_mul, cols);
 //    reset_values(vec_add, rows);
 //    reset_values(matrix, rows*cols);
 //
-//    t = clock(); 
-//    mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res); 
-//    t = clock() - t; 
-//    time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
-//    printf("AVX2:  %f \n", time_taken);
+//    mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
 //
-//    print(res, 1, rows);
-//
-//    for(int i = 0; i < rows; i++){
-//        res[i] = 0;
-//    }
+//    print(res_avx, rows, 1);
 //
 //    // reset_values
 //    reset_values(vec_mul, cols);
 //    reset_values(vec_add, rows);
 //    reset_values(matrix, cols*rows);
 //
-//    naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
+//    trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive);
 //
-//    print(res, 1, rows);
-//    //// reset_values
-//    //reset_values(vec_mul, s1);
-//    //reset_values(vec_add, s1);
-//    //reset_values(matrix, s1*s2);
+//    print(res_naive, rows, 1);
 //
-//    //t = clock(); 
-//    //naive_algo(s1, s2, matrix, vec_mul, vec_add, res);
-//    //t = clock() - t; 
-//    //time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
-//    //printf("Naive: %f \n", time_taken);
-//
-//    //print(res, 1, s1);
+//    printf("blas - avx:   ");
+//    print_bool(check_same(rows, res_blas, res_avx));
+//    printf("blas - naive: ");
+//    print_bool(check_same(rows, res_blas, res_naive));
+//    printf("naive - avx:  ");
+//    print_bool(check_same(rows, res_naive, res_avx));
 //}

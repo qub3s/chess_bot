@@ -108,8 +108,7 @@ pub fn LinearLayer(comptime T: type) type {
                 @memcpy(self.input_activations, input);
             }
 
-            // ONLY FOR BENCHMARKING
-            blas.mvmult(self.outdim, self.indim, self.weight, input, self.bias, self.bias_cpy);
+            blas.mvmult(self.outdim, self.indim, false, self.weight, input, self.bias, self.bias_cpy);
             //blas.gemv(T, self.outdim, self.indim, self.weight, false, input, self.bias_cpy, 1, 1);
 
             @memcpy(result, self.bias_cpy);
@@ -127,30 +126,22 @@ pub fn LinearLayer(comptime T: type) type {
                 sbias[i] += input[i];
             }
 
-            for (0..self.input_activations.len) |act| {
-                for (0..input.len) |inp| {
-                    sweight[act * input.len + inp] += self.input_activations[act] * input[inp];
+            for (0..input.len) |inp| {
+                for (0..self.input_activations.len) |act| {
+                    sweight[inp * self.input_activations.len + act] += self.input_activations[act] * input[inp];
                 }
             }
 
             @memset(result, 0);
 
-            // ONLY FOR BENCHMARKING
-            //blas.mvmult(self.outdim, self.indim, self.weight, input, self.bias, result);
+            // das hier funktioniert noch nicht
+            //blas.mvmult(self.outdim, self.indim, true, self.weight, input, result, result);
             blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
         }
 
         pub fn step(self: *@This(), lr: T) !void {
             try self.grad_bias.step(lr, self.bias);
             try self.grad_weight.step(lr, self.weight);
-        }
-
-        pub fn print(self: @This()) void {
-            std.debug.print("Weight: {}x{}: {any}", .{ self.indim, self.outdim, self.weight });
-        }
-
-        pub fn println(self: @This()) void {
-            std.debug.print("Weight: {}x{}\n", .{ self.indim, self.outdim });
         }
     };
 }
@@ -415,7 +406,7 @@ pub fn Network(comptime T: type) type {
             }
         }
 
-        pub fn add_ReLu(self: *@This(), dim: usize) !void {
+        pub fn add_ReLU(self: *@This(), dim: usize) !void {
             try self.layer.append(LayerType(T){ .activfunc = ActivationFunction(T){ .type_ = 0, .Allocator = self.Allocator, .s = try self.Allocator.alloc(T, dim) } });
         }
 
@@ -429,8 +420,8 @@ pub fn Network(comptime T: type) type {
             for (0..self.layer.items.len) |i| {
                 LayerInput = switch (self.layer.items[i]) {
                     .linear => blk: {
-                        print("{any}\n\n\n", .{self.allocation_field[0..10]});
                         try self.layer.items[i].linear.fp(LayerInput, self.allocation_field[0..self.layer.items[i].linear.outdim], self.eval);
+                        //print("{any}\n\n\n", .{self.allocation_field[0..self.layer.items[i].linear.outdim]});
                         break :blk self.allocation_field[0..self.layer.items[i].linear.outdim];
                     },
                     .activfunc => blk: {
@@ -645,9 +636,9 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
     const train_data = try parseFile("src/mnist_test.csv", gpa);
 
     var net = Network(T).init(gpa, false);
-    try net.add_LinearLayer(inp1, out1, 64);
-    try net.add_ReLu(inp2);
-    try net.add_LinearLayer(inp2, out2, 32);
+    try net.add_LinearLayer(inp1, out1, 42);
+    //try net.add_ReLU(inp2);
+    try net.add_LinearLayer(inp2, out2, 42);
     try net.add_MSE(1);
 
     var mse_x: f32 = 0;
@@ -727,7 +718,9 @@ fn sleep() void {
 //    const seed = 42;
 //    var model = Network(T).init(gpa, true);
 //    try model.add_LinearLayer(768, 256, seed);
+//    try model.add_ReLU(256);
 //    try model.add_LinearLayer(256, 80, seed);
+//    try model.add_ReLU(80);
 //    try model.add_LinearLayer(80, 1, seed);
 //
 //    var p: tpool.Pool = undefined;
@@ -760,6 +753,8 @@ pub fn main() !void {
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
     const T = f32;
+
+    try overfit_linear_layer(T, gpa);
 
     const seed = 42;
     var model = Network(T).init(gpa, true);
