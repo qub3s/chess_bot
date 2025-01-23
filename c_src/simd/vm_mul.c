@@ -16,10 +16,10 @@ void naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mu
 }
 
 void trans_naive_algo(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
-    for( int i = 0; i < rows; i++){
+    for( int i = 0; i < cols; i++){
         res[i] = vec_add[i];
-        for( int j = 0; j < cols; j++){
-            res[i] += vec_mul[j] * matrix[j * rows + i];
+        for( int j = 0; j < rows; j++){
+            res[i] += vec_mul[j] * matrix[i * rows + j];
         }
     }
     return;
@@ -120,7 +120,7 @@ void print_bool(int x){
 //    reset_values(vec_add, rows);
 //    reset_values(matrix, rows*cols);
 //
-//    cblas_sgemv(CblasColMajor, CblasNoTrans, rows, cols, 1, matrix, rows, vec_mul, 1, 1, vec_add, 1 ); 
+//    cblas_sgemv(CblasRowMajor, CblasNoTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
 //
 //    for(int x = 0; x < rows; x++){
 //        res_blas[x] = vec_add[x];
