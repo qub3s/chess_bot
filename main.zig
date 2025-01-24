@@ -26,7 +26,6 @@ const tile_pos = struct { x: i32, y: i32 };
 const board_evaluation = struct { board: logic.Board_s, value: f32 };
 
 // empty = 0, wking = 1, wqueen = 2, wrook = 3, wbishop = 4, wknight = 5, wpawn = 6, bking = 7 ...
-
 fn eval_board(board: logic.Board_s, model: *nn.Network(f32)) !f32 {
     var input = mem.zeroes([768]f32);
     var sol = mem.zeroes([1]f32);
@@ -214,7 +213,6 @@ fn two_mm_train(T: type, allocator: std.mem.Allocator, engine: *nn.Network(f32),
     // create model copies
     for (0..threads * 2) |_| {
         const append: *nn.Network(T) = try allocator.create(nn.Network(T));
-
         try engine.copy(append);
 
         std.debug.print("append: {*}\n", .{append});
@@ -255,7 +253,7 @@ fn two_mm_train(T: type, allocator: std.mem.Allocator, engine: *nn.Network(f32),
     return;
 }
 
-fn play_hvh() !void {
+fn v_play_hvh() !void {
     const screenWidth = 1000;
     const screenHeight = 1000;
     const tile_size = 125;
@@ -269,24 +267,71 @@ fn play_hvh() !void {
     while (!vis.ray.WindowShouldClose()) {
         vis.ray.BeginDrawing();
         defer vis.ray.EndDrawing();
-
         try vis.visualize(&board, tile_size);
+        print("{any}\n", .{board.check_mate()});
     }
+}
+
+fn play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32), randomness: f32) !void {
+    var num_move: i32 = 0;
+    var board = logic.Board_s.init();
+
+    while (board.check_win() == 0) { // check for draw
+        var pos_moves = try std.ArrayList(logic.move).initCapacity(gpa, 100);
+        defer pos_moves.deinit();
+        try board.possible_moves(&pos_moves);
+
+        var min: usize = 0;
+        var min_value: f32 = std.math.inf(f32);
+
+        for (0..pos_moves.items.len) |i| {
+            var val: f32 = undefined;
+
+            var move_to_eval = board.copy();
+            move_to_eval.make_move_m(pos_moves.items[i]);
+
+            if (move_to_eval.check_win() != 0) {
+                val = -std.math.inf(f32);
+            } else {
+                const rnd_num = rand.float(f32) * randomness;
+                if (@mod(num_move, 2) == 0) {
+                    val = try eval_board(move_to_eval, engine_b) + rnd_num;
+                } else {
+                    val = try eval_board(move_to_eval, engine_w) + rnd_num;
+                }
+            }
+
+            if (val > min_value) {
+                min_value = val;
+                min = i;
+            }
+        }
+
+        board.make_move_m(pos_moves.items[min]);
+        num_move += 1;
+    }
+
+    return;
 }
 
 pub fn main() !void {
     print("compiles...\n", .{});
-    try play_hvh();
+    try v_play_hvh();
 
-    //const T: type = f32;
-    //const seed = 22;
-    //var model = nn.Network(T).init(gpa, true);
-    //try model.add_LinearLayer(768, 64, seed);
-    //try model.add_ReLu(64);
-    //try model.add_LinearLayer(64, 32, seed);
-    //try model.add_ReLu(32);
-    //try model.add_LinearLayer(32, 1, seed);
-    //try model.add_MSE(1);
+    const T: type = f32;
+    const seed = 22;
+    var model = nn.Network(T).init(gpa, true);
+    try model.add_LinearLayer(768, 64, seed);
+    try model.add_ReLU(64);
+    try model.add_LinearLayer(64, 32, seed);
+    try model.add_ReLU(32);
+    try model.add_LinearLayer(32, 1, seed);
+    try model.add_MSE(1);
+
+    const cpy: *nn.Network(T) = try gpa.create(nn.Network(T));
+    try model.copy(cpy);
+
+    //try play_eve_single_eval(&model, cpy, 0.01);
 
     //const threads = 6;
     //try two_mm_train(T, gpa, &model, threads, 1, 1000);

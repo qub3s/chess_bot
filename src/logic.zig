@@ -13,6 +13,7 @@ pub const Board_s = struct {
     black_castled: bool,
     pieces: [64]i32,
     white_to_move: bool,
+    draw_counter: u32,
 
     pub fn possible_moves(board: *Board_s, list: *std.ArrayList(move)) !void {
         return board.get_move(list, true);
@@ -259,7 +260,7 @@ pub const Board_s = struct {
     }
 
     pub fn init() Board_s {
-        var self = Board_s{ .white_castled = false, .black_castled = false, .pieces = mem.zeroes([64]i32), .white_to_move = true };
+        var self = Board_s{ .white_castled = false, .black_castled = false, .pieces = mem.zeroes([64]i32), .white_to_move = true, .draw_counter = 0 };
 
         // white pieces
         self.set(0, 0, 3);
@@ -294,7 +295,7 @@ pub const Board_s = struct {
         copy_pieces[0] = 0;
         @memcpy(copy_pieces[0..64], self.pieces[0..64]);
 
-        return Board_s{ .white_castled = self.white_castled, .black_castled = self.black_castled, .pieces = copy_pieces, .white_to_move = self.white_to_move };
+        return Board_s{ .white_castled = self.white_castled, .black_castled = self.black_castled, .pieces = copy_pieces, .white_to_move = self.white_to_move, .draw_counter = self.draw_counter };
     }
 
     fn get_board_768(p64: [64]i32, p768: *[768]f32) void {
@@ -366,6 +367,7 @@ pub const Board_s = struct {
         }
     }
 
+    // build rest of the functionality
     pub fn check_win(board: Board_s) i32 {
         var res: i32 = 0;
         for (0..64) |i| {
@@ -378,11 +380,34 @@ pub const Board_s = struct {
         return res;
     }
 
+    pub fn check_repetition(board: Board_s) i32 {
+        if (board.draw_counter >= 50) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    // prior condition that there are zero possible moves
+    pub fn check_mate(board: *Board_s) !bool {
+        var cpy = board.copy();
+        cpy.white_to_move = cpy.white_to_move == false;
+        return checkmate_next_move(&cpy, true);
+    }
+
     pub fn make_move_m(board: *Board_s, pos: move) void {
         make_move(board, @intCast(pos.x1 + pos.y1 * 8), @intCast(pos.x2 + pos.y2 * 8));
     }
 
     pub fn make_move(board: *Board_s, pos: usize, move_to: usize) void {
+        // pawn move or capture reset
+        if (board.draw_counter < 50) {
+            if (board.pieces[pos] == 6 or board.pieces[pos] == 12 or board.pieces[move_to] != 0) {
+                board.draw_counter = 0;
+            } else {
+                board.draw_counter += 1;
+            }
+        }
         //const mt_x: i32 = @intCast(move_to % 8);
         const mt_y: i32 = @intCast(move_to / 8);
 
