@@ -12,6 +12,10 @@ pub fn Thread_ArrayList(comptime T: type) type {
             return Thread_ArrayList(T){ .list = std.ArrayList(T).init(allocator) };
         }
 
+        pub fn deinit(self: *@This()) Thread_ArrayList(T) {
+            self.list.deinit();
+        }
+
         pub fn append(self: *@This(), inp: T) !void {
             self.mutex_ressources.lock();
             try self.list.append(inp);

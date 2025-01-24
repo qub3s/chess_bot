@@ -86,7 +86,7 @@ fn worker(pool: *Pool) void {
             pool.number_of_workers -= 1;
             pool.run_control();
             pool.mutex_ressources.unlock();
-            print("worker killed!\n", .{});
+            //print("worker killed!\n", .{});
             return;
         }
 

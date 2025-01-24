@@ -380,11 +380,19 @@ pub const Board_s = struct {
         return res;
     }
 
-    pub fn check_repetition(board: Board_s) i32 {
+    pub fn check_repetition(board: Board_s) bool {
         if (board.draw_counter >= 50) {
             return true;
         } else {
             return false;
+        }
+    }
+
+    pub fn get_winner(board: Board_s) i32 {
+        if (board.white_to_move) {
+            return -1;
+        } else {
+            return 1;
         }
     }
 
