@@ -285,7 +285,7 @@ pub fn main() !void {
     networks[1] = train.train_network.init(b);
     networks[2] = train.train_network.init(c);
 
-    try train.train(&networks, 2000, 24);
+    try train.train(&networks, 100, 12);
 
     //try v_play_eve_single_eval(&model, cpy, 0.1);
 

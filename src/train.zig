@@ -15,14 +15,25 @@ pub const train_network = struct {
     network: *nn.Network(f32),
     games: u32,
     score: f32,
+    mutex_ressources: std.Thread.Mutex = .{},
 
     pub fn add_score(self: *train_network, score: f32) void {
+        self.mutex_ressources.lock();
         self.games += 1;
-        if (self.games >= 1000) {
-            self.score += score - self.score * 0.001;
-        } else {
-            self.score += score;
+
+        if (score == 0) {
+            self.score += 0.5;
         }
+
+        if (score == 1) {
+            self.score += 1;
+        }
+
+        if (self.games > 1000) {
+            self.score -= self.score * 0.001;
+        }
+
+        self.mutex_ressources.unlock();
     }
 
     pub fn init(network: *nn.Network(f32)) train_network {
@@ -62,12 +73,21 @@ pub fn train(networks: []train_network, games_until_training: u32, threads: u32)
         try networks[idx_w].network.copy(cpy_w);
         try networks[idx_b].network.copy(cpy_b);
 
-        try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w].train_data, cpy_b, &networks[idx_b].train_data, 0 });
+        try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], 0.01 });
     }
     p.finish();
+
+    std.debug.print("\n", .{});
+    std.debug.print("{}\n", .{networks[0].games});
+    std.debug.print("{}\n", .{networks[1].games});
+    std.debug.print("{}\n", .{networks[2].games});
+
+    std.debug.print("{}\n", .{networks[0].score});
+    std.debug.print("{}\n", .{networks[1].score});
+    std.debug.print("{}\n", .{networks[2].score});
 }
 
-fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32), list_w: *thread_list.Thread_ArrayList(board_evaluation), network_b: *nn.Network(f32), list_b: *thread_list.Thread_ArrayList(board_evaluation), randomness: f32) void {
+fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32), w_tn: *train_network, network_b: *nn.Network(f32), b_tn: *train_network, randomness: f32) void {
     var num_move: i32 = 0;
     var board = logic.Board_s.init();
 
@@ -139,21 +159,23 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
         moves.append(board_evaluation{ .board = board.copy(), .value = 0 }) catch break;
     }
 
+    std.debug.print("{}   ", .{result});
     if (result != 0) {
+        w_tn.add_score(@floatFromInt(result));
+        b_tn.add_score(@floatFromInt(result * -1));
+
         for (0..moves.items.len) |i| {
             // start with black eval
             moves.items[i].value = @floatFromInt(result * -1);
             result *= -1;
 
             if (@mod(i, 2) == 0) {
-                list_b.append(moves.items[i]) catch break;
+                b_tn.train_data.append(moves.items[i]) catch break;
             } else {
-                list_w.append(moves.items[i]) catch break;
+                w_tn.train_data.append(moves.items[i]) catch break;
             }
         }
     }
-
-    std.debug.print("{}   ", .{result});
 
     network_w.free();
     network_b.free();
