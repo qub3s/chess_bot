@@ -32,7 +32,7 @@ pub fn init(pool: *Pool, allocator: std.mem.Allocator, max_number_of_workers: u3
     pool.number_of_workers = 0;
     pool.sem_running.permits = 1;
     pool.process_list = std.ArrayList(*fnstruct).init(allocator);
-    pool.spawn_config = std.Thread.SpawnConfig{ .stack_size = 16 * 1024 * 1024, .allocator = allocator };
+    pool.spawn_config = std.Thread.SpawnConfig{ .stack_size = 100 * 1024 * 1024, .allocator = allocator };
 }
 
 // this function needs to be always under a mutex lock
@@ -61,7 +61,10 @@ pub fn spawn(pool: *Pool, comptime func: anytype, args: anytype) !void {
         }
     };
 
-    pool.mutex_ressources.lock();
+    if (!pool.mutex_ressources.tryLock()) {
+        pool.mutex_ressources.lock();
+        std.debug.print("failed lock\n", .{});
+    }
 
     const process: *process_container = try pool.allocator.create(process_container);
     process.* = .{ .arguments = args, .pools = pool };
@@ -79,7 +82,10 @@ pub fn spawn(pool: *Pool, comptime func: anytype, args: anytype) !void {
 
 fn worker(pool: *Pool) void {
     while (true) {
-        pool.mutex_ressources.lock();
+        if (!pool.mutex_ressources.tryLock()) {
+            pool.mutex_ressources.lock();
+            std.debug.print("failed lock\n", .{});
+        }
 
         // kill worker
         if (pool.process_list.items.len == 0) {

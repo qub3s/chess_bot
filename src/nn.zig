@@ -693,7 +693,7 @@ fn bench_fn(T: type, model: *Network(T), network_stack: *Thread_ArrayList.Thread
     var res = std.mem.zeroes([1]T);
     var err = std.mem.zeroes([1]T);
 
-    for (0..1000) |_| {
+    for (0..10000) |_| {
         model.fp(&X, &y, &res, &err) catch return;
     }
 
@@ -711,41 +711,42 @@ fn sleep() void {
     //7 - 3
 }
 
-//pub fn benchmarking(gpa: std.mem.Allocator) !void {
-//    const threads = 2;
-//    const T = f32;
-//
-//    const seed = 42;
-//    var model = Network(T).init(gpa, true);
-//    try model.add_LinearLayer(768, 256, seed);
-//    try model.add_ReLU(256);
-//    try model.add_LinearLayer(256, 80, seed);
-//    try model.add_ReLU(80);
-//    try model.add_LinearLayer(80, 1, seed);
-//
-//    var p: tpool.Pool = undefined;
-//    p.init(gpa, threads);
-//
-//    var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
-//
-//    for (0..threads * 4) |_| {
-//        var append = try model.copy();
-//        try network_stack.append(&append);
-//    }
-//
-//    print("start\n", .{});
-//    const start = std.time.microTimestamp();
-//
-//    for (0..24) |i| {
-//        print("{}\n", .{i});
-//        const mod = try network_stack.pop();
-//        try p.spawn(bench_fn, .{ T, mod, &network_stack });
-//        //try p.spawn(sleep, .{});
-//    }
-//    p.finish();
-//    const end = std.time.microTimestamp();
-//    print("{}\n", .{(end - start)});
-//}
+pub fn benchmarking(gpa: std.mem.Allocator) !void {
+    const threads = 6;
+    const T = f32;
+
+    const seed = 42;
+    var model = Network(T).init(gpa, true);
+    try model.add_LinearLayer(768, 256, seed);
+    try model.add_ReLU(256);
+    try model.add_LinearLayer(256, 80, seed);
+    try model.add_ReLU(80);
+    try model.add_LinearLayer(80, 1, seed);
+
+    var p: tpool.Pool = undefined;
+    p.init(gpa, threads);
+
+    var network_stack = Thread_ArrayList.Thread_ArrayList(*Network(T)).init(gpa);
+
+    for (0..threads + 1) |_| {
+        const cpy: *Network(f32) = gpa.create(Network(f32)) catch return;
+        try model.copy(cpy);
+        try network_stack.append(cpy);
+    }
+
+    print("start\n", .{});
+    const start = std.time.microTimestamp();
+
+    for (0..240) |i| {
+        print("{}\n", .{i});
+        const mod = try network_stack.pop();
+        try p.spawn(bench_fn, .{ T, mod, &network_stack });
+        //try p.spawn(sleep, .{});
+    }
+    p.finish();
+    const end = std.time.microTimestamp();
+    print("{}\n", .{(end - start)});
+}
 
 pub fn main() !void {
     print("compiles... \n", .{});
@@ -753,6 +754,8 @@ pub fn main() !void {
     var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = general_purpose_alloc.allocator();
     const T = f32;
+
+    try benchmarking(gpa);
 
     try overfit_linear_layer(T, gpa);
 

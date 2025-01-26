@@ -18,7 +18,9 @@ pub const train_network = struct {
     mutex_ressources: std.Thread.Mutex = .{},
 
     pub fn add_score(self: *train_network, score: f32) void {
-        self.mutex_ressources.lock();
+        if (!self.mutex_ressources.tryLock()) {
+            self.mutex_ressources.lock();
+        }
         self.games += 1;
 
         if (score == 0) {
@@ -33,6 +35,16 @@ pub const train_network = struct {
             self.score -= self.score * 0.001;
         }
 
+        self.mutex_ressources.unlock();
+    }
+
+    pub fn reset_score(self: *train_network) void {
+        if (!self.mutex_ressources.tryLock()) {
+            std.debug.print("lock failed\n", .{});
+            self.mutex_ressources.lock();
+        }
+        self.score = 0;
+        self.games = 0;
         self.mutex_ressources.unlock();
     }
 
@@ -56,35 +68,84 @@ pub fn create_random_net(seed: u32) *nn.Network(f32) {
     return cpy;
 }
 
-pub fn train(networks: []train_network, games_until_training: u32, threads: u32) !void {
+fn train_batch(network: *train_network, lr: f32) void {
+    var res: [1]f32 = .{0};
+    var err: [1]f32 = .{0};
+    network.network.eval = false;
+
+    for (0..10) |_| {
+        while (network.train_data.list.items.len != 0) {
+            const X_raw = network.train_data.pop() catch return;
+            var X: [768]f32 = mem.zeroes([768]f32);
+            X_raw.board.get_input(&X);
+
+            var y: [1]f32 = undefined;
+            y[0] = X_raw.value;
+
+            network.network.fp(&X, &y, &res, &err) catch return;
+            network.network.bp(&y) catch return;
+        }
+
+        network.network.step(lr) catch return;
+    }
+
+    network.network.eval = true;
+}
+
+pub fn train(networks: []train_network, games_until_training: u32, threads: u32, lr: f32, rng: f32, epochs: u32) !void {
     var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var rand = rnd.random();
 
     var p: tpool.Pool = undefined;
     p.init(gpa, threads);
 
-    for (0..networks.len * games_until_training / 2) |_| {
-        const idx_w = rand.intRangeAtMost(usize, 0, networks.len - 1);
-        const idx_b = rand.intRangeAtMost(usize, 0, networks.len - 1);
+    for (0..epochs) |ep| {
+        std.debug.print("{}\n", .{ep});
 
-        const cpy_w: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
-        const cpy_b: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
+        // play games
+        for (0..networks.len * games_until_training / 2) |_| {
+            const idx_w = rand.intRangeAtMost(usize, 0, networks.len - 1);
+            const idx_b = rand.intRangeAtMost(usize, 0, networks.len - 1);
 
-        try networks[idx_w].network.copy(cpy_w);
-        try networks[idx_b].network.copy(cpy_b);
+            const cpy_w: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
+            const cpy_b: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
 
-        try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], 0.01 });
+            try networks[idx_w].network.copy(cpy_w);
+            try networks[idx_b].network.copy(cpy_b);
+
+            try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
+            //try p.spawn(compete_eve_single_eval, .{ cpy_w, cpy_b, 5, 0.01 });
+        }
+        p.finish();
+
+        // gradient descent1
+        for (0..networks.len) |i| {
+            try p.spawn(train_batch, .{ &networks[i], lr });
+        }
+        p.finish();
+
+        // save networks
+        for (0..networks.len) |i| {
+            var file_name: [2]u8 = undefined;
+            try networks[i].network.save(try std.fmt.bufPrint(&file_name, "{d}", .{i}));
+        }
+
+        // check if model should be replaced
+        for (0..networks.len) |i| {
+            if (networks[i].score / @as(f32, @floatFromInt(networks[i].games)) < 0.25) {
+                // memory leak here that is ignored
+                const new: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
+                if (i != 0) {
+                    networks[i - 1].network.copy(new) catch return;
+                } else {
+                    networks[networks.len - 1].network.copy(new) catch return;
+                }
+                networks[i].network = new;
+                std.debug.print("replaced_movel\n", .{});
+            }
+            networks[i].reset_score();
+        }
     }
-    p.finish();
-
-    std.debug.print("\n", .{});
-    std.debug.print("{}\n", .{networks[0].games});
-    std.debug.print("{}\n", .{networks[1].games});
-    std.debug.print("{}\n", .{networks[2].games});
-
-    std.debug.print("{}\n", .{networks[0].score});
-    std.debug.print("{}\n", .{networks[1].score});
-    std.debug.print("{}\n", .{networks[2].score});
 }
 
 fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32), w_tn: *train_network, network_b: *nn.Network(f32), b_tn: *train_network, randomness: f32) void {
@@ -135,7 +196,14 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                         allocator.destroy(network_b);
                         return;
                     };
-                    val = rnd_num + ev;
+                    //const ev = minimax(&move_to_eval, network_w, 1) catch {
+                    //    network_w.free();
+                    //    network_b.free();
+                    //    allocator.destroy(network_w);
+                    //    allocator.destroy(network_b);
+                    //    return;
+                    //};
+                    val = ev + rnd_num;
                 } else {
                     const ev = eval_board(move_to_eval, network_w) catch {
                         network_w.free();
@@ -144,7 +212,14 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                         allocator.destroy(network_b);
                         return;
                     };
-                    val = rnd_num + ev;
+                    //const ev = minimax(&move_to_eval, network_b, 1) catch {
+                    //    network_w.free();
+                    //    network_b.free();
+                    //    allocator.destroy(network_w);
+                    //    allocator.destroy(network_b);
+                    //    return;
+                    //};
+                    val = ev + rnd_num;
                 }
             }
 
@@ -159,14 +234,13 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
         moves.append(board_evaluation{ .board = board.copy(), .value = 0 }) catch break;
     }
 
-    std.debug.print("{}   ", .{result});
     if (result != 0) {
         w_tn.add_score(@floatFromInt(result));
         b_tn.add_score(@floatFromInt(result * -1));
 
         for (0..moves.items.len) |i| {
             // start with black eval
-            moves.items[i].value = @floatFromInt(result * -1);
+            moves.items[i].value = @floatFromInt(result);
             result *= -1;
 
             if (@mod(i, 2) == 0) {
@@ -183,7 +257,134 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
     allocator.destroy(network_b);
 }
 
-fn eval_board(board: logic.Board_s, model: *nn.Network(f32)) !f32 {
+pub fn compete_eve_single_eval(network_A: *nn.Network(f32), network_B: *nn.Network(f32), games: u32, randomness: f32) void {
+    var network_w: *nn.Network(f32) = undefined;
+    var network_b: *nn.Network(f32) = undefined;
+    var score: i32 = 0;
+
+    var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    var rand = rnd.random();
+
+    for (0..games) |g| {
+        var board = logic.Board_s.init();
+        var result: i32 = undefined;
+        var num_move: i32 = 0;
+
+        if (g % 2 == 0) {
+            network_w = network_A;
+            network_b = network_B;
+        } else {
+            network_w = network_B;
+            network_b = network_A;
+        }
+
+        while (true) {
+            var pos_moves = std.ArrayList(logic.move).init(gpa);
+            defer pos_moves.deinit();
+            board.possible_moves(&pos_moves) catch break;
+
+            const mate = board.check_mate() catch break;
+            if (board.check_repetition() or pos_moves.items.len == 0) {
+                if (pos_moves.items.len == 0 and mate) {
+                    result = board.get_winner();
+                } else {
+                    result = 0;
+                }
+                break;
+            }
+
+            var min: usize = 0;
+            var min_value: f32 = std.math.inf(f32);
+
+            for (0..pos_moves.items.len) |i| {
+                var val: f32 = undefined;
+
+                var move_to_eval = board.copy();
+                move_to_eval.make_move_m(pos_moves.items[i]);
+
+                if (move_to_eval.check_win() != 0) {
+                    val = -std.math.inf(f32);
+                } else {
+                    const rnd_num = rand.float(f32) * randomness;
+                    if (@mod(num_move, 2) == 0) {
+                        const ev = minimax(&move_to_eval, network_w, 1) catch return;
+                        val = rnd_num + ev;
+                    } else {
+                        const ev = minimax(&move_to_eval, network_b, 1) catch return;
+                        val = rnd_num + ev;
+                    }
+                }
+
+                if (val < min_value) {
+                    min_value = val;
+                    min = i;
+                }
+            }
+
+            board.make_move_m(pos_moves.items[min]);
+            num_move += 1;
+        }
+
+        if (g % 2 == 0) {
+            score += result;
+        } else {
+            score -= result;
+        }
+        std.debug.print("{}\n", .{score});
+    }
+}
+
+pub fn minimax(board: *logic.Board_s, model: *nn.Network(f32), level: u32) !f32 {
+    if (level == 0) {
+        return eval_board(board.*, model);
+    }
+
+    var pos_moves = std.ArrayList(logic.move).init(gpa);
+    defer pos_moves.deinit();
+    try board.possible_moves(&pos_moves);
+
+    // check for checkmate
+    const mate = try board.check_mate();
+
+    if (board.check_repetition() or pos_moves.items.len == 0) {
+        if (pos_moves.items.len == 0 and mate) {
+            return std.math.inf(f32) * @as(f32, @floatFromInt(board.get_winner()));
+        } else {
+            return 0;
+        }
+    }
+
+    if (level % 2 == 0) {
+        var value: f32 = -std.math.inf(f32);
+        // maximize
+        for (0..pos_moves.items.len) |i| {
+            var cpy = board.copy();
+            cpy.make_move_m(pos_moves.items[i]);
+            const res = try minimax(&cpy, model, level - 1);
+
+            if (res > value) {
+                value = res;
+            }
+        }
+        return value;
+    } else {
+        // minimize
+        var value: f32 = std.math.inf(f32);
+
+        for (0..pos_moves.items.len) |i| {
+            var cpy = board.copy();
+            cpy.make_move_m(pos_moves.items[i]);
+            const res = try minimax(&cpy, model, level - 1);
+
+            if (res < value) {
+                value = res;
+            }
+        }
+        return value;
+    }
+}
+
+pub fn eval_board(board: logic.Board_s, model: *nn.Network(f32)) !f32 {
     var input = mem.zeroes([768]f32);
     var sol = mem.zeroes([1]f32);
     var result = mem.zeroes([1]f32);
@@ -193,7 +394,6 @@ fn eval_board(board: logic.Board_s, model: *nn.Network(f32)) !f32 {
     if (res != 0) {
         return std.math.inf(f32);
     }
-
     board.get_input(&input);
     try model.fp(&input, &sol, &result, &err);
     return result[0];

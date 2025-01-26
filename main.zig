@@ -7,6 +7,10 @@ const vis = @import("src/visualize.zig");
 const tpool = @import("src/thread_pool.zig");
 const train = @import("src/train.zig");
 
+pub const ray = @cImport({
+    @cInclude("raylib.h");
+});
+
 const Thread_ArrayList = @import("src/Thread_ArrayList.zig");
 
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
@@ -78,84 +82,6 @@ fn two_mm_play_move_single_eval(engine: *nn.Network(f32), board: *logic.Board_s)
     return board.*;
 }
 
-//fn train(engine: *nn.Network(f32), result: *std.ArrayList(board_evaluation), epochs: usize, lr: f32) !void {
-//    const batchsize = result.items.len;
-//    var err = std.mem.zeroes([1]f32);
-//    var res = std.mem.zeroes([1]f32);
-//
-//    for (0..batchsize * epochs) |i| {
-//        const sample = rand.intRangeAtMost(usize, 0, batchsize - 1);
-//        var X = std.mem.zeroes([768]f32);
-//        result.items[sample].board.get_input(&X);
-//
-//        var y: [1]f32 = undefined;
-//        y[0] = result.items[sample].value;
-//
-//        try engine.fp(&X, &y, &res, &err);
-//
-//        const e = res[0];
-//        try engine.bp(&y);
-//
-//        if (i % batchsize == 0 and i != 0) {
-//            try engine.step(lr);
-//        }
-//
-//        if (std.math.isNan(e) or std.math.isInf(e)) {
-//            print("break\n", .{});
-//            break;
-//        }
-//    }
-//}
-
-//fn two_mm_train(T: type, allocator: std.mem.Allocator, engine: *nn.Network(f32), threads: u32, train_runs: u32, games_per_train_run: u32) !void {
-//    var network_stack = Thread_ArrayList.Thread_ArrayList(*nn.Network(T)).init(allocator);
-//
-//    var p: tpool.Pool = undefined;
-//    p.init(allocator, threads);
-//
-//    // create model copies
-//    for (0..threads * 2) |_| {
-//        const append: *nn.Network(T) = try allocator.create(nn.Network(T));
-//        try engine.copy(append);
-//
-//        std.debug.print("append: {*}\n", .{append});
-//        try network_stack.append(append);
-//    }
-//
-//    for (0..train_runs) |_| {
-//        var results = std.ArrayList(*std.ArrayList(board_evaluation)).init(allocator);
-//        defer results.deinit();
-//
-//        // collect the games
-//        for (0..games_per_train_run) |_| {
-//            const res = try allocator.create(std.ArrayList(board_evaluation));
-//            res.* = try std.ArrayList(board_evaluation).initCapacity(allocator, max_game_len);
-//            try results.append(res);
-//
-//            //const mod = try network_stack.pop();
-//            //try p.spawn(two_mm_play_engine_game, .{ mod, 1, results.items[results.items.len - 1], &network_stack });
-//        }
-//        p.finish();
-//
-//        // delete the model copies
-//        while (network_stack.list.items.len != 0) {
-//            const deinit = network_stack.list.items[network_stack.list.items.len - 1];
-//            deinit.free();
-//        }
-//
-//        var unify = std.ArrayList(board_evaluation).init(allocator);
-//
-//        for (results.items) |res| {
-//            try unify.appendSlice(res.items);
-//            res.deinit();
-//        }
-//
-//        // train
-//    }
-//
-//    return;
-//}
-
 fn v_play_hvh() !void {
     const screenWidth = 1000;
     const screenHeight = 1000;
@@ -216,12 +142,13 @@ fn v_play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32)
         defer pos_moves.deinit();
         try board.possible_moves(&pos_moves);
 
-        if (board.check_repetition() or (pos_moves.items.len == 0 and try board.check_mate())) {
+        if (board.check_repetition() or (pos_moves.items.len == 0)) {
             if (pos_moves.items.len == 0 and try board.check_mate()) {
                 result = board.get_winner();
             } else {
                 result = 0;
             }
+
             break;
         }
 
@@ -239,9 +166,11 @@ fn v_play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32)
             } else {
                 const rnd_num = rand.float(f32) * randomness;
                 if (@mod(num_move, 2) == 0) {
-                    val = try train.eval_board(move_to_eval, engine_b) + rnd_num;
+                    val = try train.minimax(&move_to_eval, engine_w, 1);
+                    val += rnd_num;
                 } else {
-                    val = try train.eval_board(move_to_eval, engine_w) + rnd_num;
+                    val = try train.minimax(&move_to_eval, engine_b, 1);
+                    val += rnd_num;
                 }
             }
 
@@ -259,6 +188,7 @@ fn v_play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32)
 
 pub fn main() !void {
     print("compiles...\n", .{});
+    ray.SetTraceLogLevel(5);
     //try v_play_hvh();
 
     const T: type = f32;
@@ -280,29 +210,31 @@ pub fn main() !void {
     const c: *nn.Network(T) = try gpa.create(nn.Network(T));
     try model.copy(c);
 
-    var networks: [3]train.train_network = undefined;
+    const d: *nn.Network(T) = try gpa.create(nn.Network(T));
+    try model.copy(d);
+
+    const e: *nn.Network(T) = try gpa.create(nn.Network(T));
+    try model.copy(e);
+
+    const f: *nn.Network(T) = try gpa.create(nn.Network(T));
+    try model.copy(f);
+
+    const g: *nn.Network(T) = try gpa.create(nn.Network(T));
+    try model.copy(g);
+
+    var networks: [7]train.train_network = undefined;
     networks[0] = train.train_network.init(a);
     networks[1] = train.train_network.init(b);
     networks[2] = train.train_network.init(c);
+    networks[3] = train.train_network.init(d);
+    networks[4] = train.train_network.init(e);
+    networks[5] = train.train_network.init(d);
+    networks[6] = train.train_network.init(e);
 
-    try train.train(&networks, 100, 12);
-
-    //try v_play_eve_single_eval(&model, cpy, 0.1);
-
-    //const threads = 6;
-    //try two_mm_train(T, gpa, &model, threads, 1, 1000);
-
-    // declare allocator
-
-    //try stage_one_train(gpa);
-
-    //var model1 = nn.Network(T){ .layer = std.ArrayList(nn.LayerType(T)).init(gpa), .Allocator = gpa, .eval = true };
-    //try model1.add_LinearLayer(768, 64, seed);
-    //try model1.add_ReLu(64);
-    //try model1.add_LinearLayer(64, 32, seed);
-    //try model1.add_ReLu(32);
-    //try model1.add_LinearLayer(32, 1, seed);
-    //try model1.add_MSE(1);
-
-    //try model_competition(&model, &model1, 10, 0.9);
+    try train.train(&networks, 1000, 4, 0.01, 0.01, 10000);
+    //try train.compete_eve_single_eval(a, b, 100, 0.01);
+    //std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
+    //for (0..100) |_| {
+    //    std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
+    //}
 }
