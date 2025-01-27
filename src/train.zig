@@ -92,7 +92,7 @@ fn train_batch(network: *train_network, lr: f32) void {
     network.network.eval = true;
 }
 
-pub fn train(networks: []train_network, games_until_training: u32, threads: u32, lr: f32, rng: f32, epochs: u32) !void {
+pub fn train(networks: []train_network, games_until_training: u32, threads: u32, lr: f32, _: f32, epochs: u32) !void {
     var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var rand = rnd.random();
 
@@ -113,7 +113,8 @@ pub fn train(networks: []train_network, games_until_training: u32, threads: u32,
             try networks[idx_w].network.copy(cpy_w);
             try networks[idx_b].network.copy(cpy_b);
 
-            try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
+            //try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
+            try p.spawn(check_general_speed, .{});
             //try p.spawn(compete_eve_single_eval, .{ cpy_w, cpy_b, 5, 0.01 });
         }
         p.finish();
@@ -155,13 +156,16 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
     var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var rand = rnd.random();
 
+    var general_purpose_allocators = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpas = general_purpose_allocators.allocator();
+
     var result: i32 = undefined;
 
-    var moves = std.ArrayList(board_evaluation).init(gpa);
+    var moves = std.ArrayList(board_evaluation).initCapacity(gpas, 512) catch return;
     defer moves.deinit();
 
     while (true) {
-        var pos_moves = std.ArrayList(logic.move).init(gpa);
+        var pos_moves = std.ArrayList(logic.move).initCapacity(gpas, 64) catch return;
         defer pos_moves.deinit();
         board.possible_moves(&pos_moves) catch break;
 
@@ -189,7 +193,7 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
             } else {
                 const rnd_num = rand.float(f32) * randomness;
                 if (@mod(num_move, 2) == 0) {
-                    const ev = eval_board(move_to_eval, network_b) catch {
+                    const ev = eval_board(&move_to_eval, network_b) catch {
                         network_w.free();
                         network_b.free();
                         allocator.destroy(network_w);
@@ -205,7 +209,7 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                     //};
                     val = ev + rnd_num;
                 } else {
-                    const ev = eval_board(move_to_eval, network_w) catch {
+                    const ev = eval_board(&move_to_eval, network_w) catch {
                         network_w.free();
                         network_b.free();
                         allocator.destroy(network_w);
@@ -255,6 +259,16 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
     network_b.free();
     allocator.destroy(network_w);
     allocator.destroy(network_b);
+}
+
+fn check_general_speed() void {
+    var board = logic.Board_s.init();
+    var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return;
+    defer pos_moves.deinit();
+
+    for (0..10000000) |_| {
+        board.possible_moves(&pos_moves) catch return;
+    }
 }
 
 pub fn compete_eve_single_eval(network_A: *nn.Network(f32), network_B: *nn.Network(f32), games: u32, randomness: f32) void {
@@ -384,16 +398,18 @@ pub fn minimax(board: *logic.Board_s, model: *nn.Network(f32), level: u32) !f32 
     }
 }
 
-pub fn eval_board(board: logic.Board_s, model: *nn.Network(f32)) !f32 {
+pub fn eval_board(board: *logic.Board_s, model: *nn.Network(f32)) !f32 {
     var input = mem.zeroes([768]f32);
     var sol = mem.zeroes([1]f32);
     var result = mem.zeroes([1]f32);
     var err = mem.zeroes([1]f32);
 
     const res: f32 = @floatFromInt(board.check_win());
+
     if (res != 0) {
         return std.math.inf(f32);
     }
+
     board.get_input(&input);
     try model.fp(&input, &sol, &result, &err);
     return result[0];
