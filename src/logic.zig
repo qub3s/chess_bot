@@ -229,7 +229,146 @@ pub const Board_s = struct {
     pub fn move_results_checkmate(self: *Board_s, m: move, rec: bool) !bool {
         var cpy = self.copy();
         cpy.make_move_m(m);
-        return try cpy.checkmate_next_move(rec);
+
+        if (try checked(&cpy)) {
+            return try cpy.checkmate_next_move(rec);
+        } else {
+            return false;
+        }
+    }
+
+    pub fn checked(board: *Board_s) !bool {
+        var king_value: i32 = undefined;
+        var lower_bound: i32 = undefined;
+        var upper_bound: i32 = undefined;
+
+        if (board.white_to_move) {
+            king_value = 7;
+            lower_bound = 0;
+            upper_bound = 7;
+        } else {
+            king_value = 1;
+            lower_bound = 6;
+            upper_bound = 13;
+        }
+
+        for (0..64) |i| {
+            var mov: move = undefined;
+            if (board.pieces[i] > lower_bound and board.pieces[i] < upper_bound) {
+                const x: i32 = @intCast(i % 8);
+                const y: i32 = @intCast(i / 8);
+                const white = board.pieces[i] < 7;
+
+                if (board.pieces[i] == lower_bound + 2) {
+                    const x_change = [_]i32{ 1, -1, 0, 0, 1, 1, -1, -1 };
+                    const y_change = [_]i32{ 0, 0, 1, -1, 1, -1, -1, 1 };
+
+                    for (x_change, y_change) |xc, yc| {
+                        var x2 = x + xc;
+                        var y2 = y + yc;
+
+                        while (valid_move(board, x2, y2, white)) {
+                            mov = move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 };
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] == king_value) {
+                                return true;
+                            }
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] != 0) {
+                                break;
+                            }
+
+                            x2 = x2 + xc;
+                            y2 = y2 + yc;
+                        }
+                    }
+                }
+
+                if (board.pieces[i] == lower_bound + 3) {
+                    const x_change = [_]i32{ 1, -1, 0, 0 };
+                    const y_change = [_]i32{ 0, 0, 1, -1 };
+
+                    for (x_change, y_change) |xc, yc| {
+                        var x2 = x + xc;
+                        var y2 = y + yc;
+
+                        while (valid_move(board, x2, y2, white)) {
+                            mov = move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 };
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] == king_value) {
+                                return true;
+                            }
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] != 0) {
+                                break;
+                            }
+                            x2 = x2 + xc;
+                            y2 = y2 + yc;
+                        }
+                    }
+                }
+
+                // add bishop moves
+                if (board.pieces[i] == lower_bound + 4) {
+                    const x_change = [_]i32{ 1, 1, -1, -1 };
+                    const y_change = [_]i32{ 1, -1, 1, -1 };
+
+                    for (x_change, y_change) |xc, yc| {
+                        var x2 = x + xc;
+                        var y2 = y + yc;
+
+                        while (valid_move(board, x2, y2, white)) {
+                            mov = move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 };
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] == king_value) {
+                                return true;
+                            }
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] != 0) {
+                                break;
+                            }
+                            x2 = x2 + xc;
+                            y2 = y2 + yc;
+                        }
+                    }
+                }
+                // add knight moves
+                if (board.pieces[i] == lower_bound + 5) {
+                    const x_change = [_]i32{ 2, 2, -2, -2, 1, 1, -1, -1 };
+                    const y_change = [_]i32{ 1, -1, 1, -1, 2, -2, 2, -2 };
+
+                    for (x_change, y_change) |xc, yc| {
+                        const x2 = x + xc;
+                        const y2 = y + yc;
+
+                        if (valid_move(board, x2, y2, white)) {
+                            mov = move{ .x1 = x, .y1 = y, .x2 = x2, .y2 = y2 };
+
+                            if (board.pieces[@intCast(x2 + y2 * 8)] == king_value) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // add pawn white moves
+                if (board.pieces[i] == lower_bound + 6) {
+                    // capture left
+                    if (valid_move(board, x - 1, y + 1, white)) {
+                        if (board.pieces[@intCast(x - 1 + (y + 1) * 8)] == king_value) {
+                            return true;
+                        }
+                    }
+
+                    // capture right
+                    if (valid_move(board, x + 1, y + 1, white)) {
+                        if (board.pieces[@intCast(x + 1 + (y + 1) * 8)] == king_value) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     pub fn set(self: *Board_s, x: i32, y: i32, value: i32) void {
