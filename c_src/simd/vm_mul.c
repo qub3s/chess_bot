@@ -25,30 +25,33 @@ void trans_naive_algo(int cols, int rows, float *matrix, float *vec_add, float *
     return;
 }
 
+// function has to be compiled with -O3 flag
 void trans_mat_vec_AVX2(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
     if( cols%8 != 0 || rows%8 != 0){
         printf("overflow\n");
-        return naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
+        return trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
     }
 
-    __m256 *r = (__m256*) res;
-    __m256 *add = (__m256*) vec_add;
-
-    __m256 v_mat, v_vec;
+    __m256 v_mat, v_vec, v_res, store;
 
     for( int i = 0; i < rows; i += 1){
         v_vec = _mm256_set1_ps(vec_mul[i]);
 
         for(int j = 0; j < cols; j += 8){
-            v_mat = _mm256_loadu_ps(matrix + cols * i + j);   
-            r[j/8] = _mm256_fmadd_ps(v_mat, v_vec, r[j/8]); 
+            v_mat = _mm256_loadu_ps(matrix + cols * i + j);
+            v_res = _mm256_loadu_ps(res+j);
+
+            store = _mm256_fmadd_ps(v_mat, v_vec, v_res); 
+
+            _mm256_storeu_ps(res+j, store);   
         }
     }
 
     for( int i = 0; i < rows; i += 8){
-        v_vec = _mm256_loadu_ps(res + i);
-        v_mat = _mm256_loadu_ps(vec_add + i);   
-        r[i/8] = _mm256_add_ps(v_vec, v_mat);
+        v_res = _mm256_loadu_ps(res+i);
+        v_vec = _mm256_loadu_ps(vec_add+i);
+        store = _mm256_add_ps(v_vec, v_res);
+        _mm256_storeu_ps(res+i, store);   
     }
 }
 
@@ -126,8 +129,12 @@ void print_bool(int x){
 // Fill the arrays
 int main() {
     printf("compiled...\n");
-    int rows = 8;
-    int cols = 16;
+    int rows = 8000;
+    int cols = 8000;
+    int max; 
+    clock_t time;
+
+    if( rows > cols ){ max = rows; } else{ max = cols; }
 
     float *vec_mul; 
     float *vec_add; 
@@ -135,24 +142,27 @@ int main() {
     vec_add = malloc(rows * sizeof(float));
 
     float *matrix;
-    matrix = malloc(rows * cols * sizeof(float));
+    matrix= malloc(rows * cols * sizeof(float));
 
-    float res_blas[rows] = {};
-    float res_avx[rows] = {};
-    float res_naive[rows] = {};
+    float res_blas[rows];
+    float res_avx[cols];
+    float res_naive[rows];
 
     // set values
     reset_values(vec_mul, cols);
     reset_values(vec_add, rows);
     reset_values(matrix, rows*cols);
 
+    time = clock();
     cblas_sgemv(CblasRowMajor, CblasTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
+    time = clock() - time;
+    printf("%f\n", (float)time/CLOCKS_PER_SEC);
 
     for(int x = 0; x < rows; x++){
         res_blas[x] = vec_add[x];
     }
 
-    print(res_blas, rows, 1);
+    //print(res_blas, rows, 1);
 
     // reset_values
     reset_values(vec_mul, cols);
@@ -163,25 +173,18 @@ int main() {
         res_avx[x] = res_avx[x];
     }
 
+    time = clock();
     trans_mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
+    time = clock() - time;
+    printf("%f\n", (float)time/CLOCKS_PER_SEC);
 
-    print(res_avx, rows, 1);
+    //print(res_avx, rows, 1);
 
-    // reset_values
-    reset_values(vec_mul, cols);
-    reset_values(vec_add, rows);
-    reset_values(matrix, cols*rows);
+    time = clock();
+    mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
+    time = clock() - time;
+    printf("%f\n", (float)time/CLOCKS_PER_SEC);
 
-    //trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive);
-
-    print(res_naive, rows, 1);
-
-    printf("blas - avx:   ");
-    print_bool(check_same(rows, res_blas, res_avx));
-    printf("blas - naive: ");
-    print_bool(check_same(rows, res_blas, res_naive));
-    printf("naive - avx:  ");
-    print_bool(check_same(rows, res_naive, res_avx));
     //// reset_values
     //reset_values(vec_mul, cols);
     //reset_values(vec_add, rows);
