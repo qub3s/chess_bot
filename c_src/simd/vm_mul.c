@@ -25,29 +25,30 @@ void trans_naive_algo(int cols, int rows, float *matrix, float *vec_add, float *
     return;
 }
 
-#include<unistd.h>
-
 void trans_mat_vec_AVX2(int cols, int rows, float *matrix, float *vec_add, float *vec_mul, float *res){
     if( cols%8 != 0 || rows%8 != 0){
         printf("overflow\n");
-        return trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
+        return naive_algo(cols, rows, matrix, vec_add, vec_mul, res);
     }
 
-    __m256 v_mat, v_vec, sol;
-    float *store = malloc(cols); // save size as vec_mul stores the partial sums
+    __m256 *r = (__m256*) res;
+    __m256 *add = (__m256*) vec_add;
+
+    __m256 v_mat, v_vec;
+
+    for( int i = 0; i < rows; i += 1){
+        v_vec = _mm256_set1_ps(vec_mul[i]);
+
+        for(int j = 0; j < cols; j += 8){
+            v_mat = _mm256_loadu_ps(matrix + cols * i + j);   
+            r[j/8] = _mm256_fmadd_ps(v_mat, v_vec, r[j/8]); 
+        }
+    }
 
     for( int i = 0; i < rows; i += 8){
-        printf("%d\n",i);
-        v_vec = _mm256_loadu_ps(vec_mul + i);  
-        sol = _mm256_loadu_ps(vec_add+i);  
-
-        for(int j = 0; j < cols; j += 1){
-            printf("%d\n",j);
-            v_mat = _mm256_loadu_ps(matrix + cols * j + i);   
-            sol = _mm256_fmadd_ps(v_mat, v_vec, sol);
-        }
-
-        _mm256_store_ps(res+i,sol);
+        v_vec = _mm256_loadu_ps(res + i);
+        v_mat = _mm256_loadu_ps(vec_add + i);   
+        r[i/8] = _mm256_add_ps(v_vec, v_mat);
     }
 }
 
@@ -65,7 +66,7 @@ void mat_vec_AVX2(int cols, int rows, float *matrix, float *vec_add, float *vec_
         sum = _mm256_setzero_ps();  
 
         for(int j = 0; j < cols; j += 8){
-            v_vec = _mm256_loadu_ps(vec_mul + j);  
+            v_vec = _mm256_loadu_ps(vec_mul + j);  // versuchen aus dem inneren loop rauszubewegen
             v_mat = _mm256_loadu_ps(matrix + cols * i + j);   
             sum = _mm256_fmadd_ps(v_mat, v_vec, sum); 
         }
@@ -100,7 +101,7 @@ void print(float *ptr, int width, int height){
 
 void reset_values(float *ptr,int values){
     for(int h = 0; h < values; h++){
-        ptr[h] = h /3.1415, 1;
+        ptr[h] = h /3.1415;
     }
 }
 
@@ -145,7 +146,7 @@ int main() {
     reset_values(vec_add, rows);
     reset_values(matrix, rows*cols);
 
-    //cblas_sgemv(CblasRowMajor, CblasTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
+    cblas_sgemv(CblasRowMajor, CblasTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
 
     for(int x = 0; x < rows; x++){
         res_blas[x] = vec_add[x];
@@ -157,6 +158,10 @@ int main() {
     reset_values(vec_mul, cols);
     reset_values(vec_add, rows);
     reset_values(matrix, rows*cols);
+
+    for(int x = 0; x < rows; x++){
+        res_avx[x] = res_avx[x];
+    }
 
     trans_mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
 
@@ -177,4 +182,12 @@ int main() {
     print_bool(check_same(rows, res_blas, res_naive));
     printf("naive - avx:  ");
     print_bool(check_same(rows, res_naive, res_avx));
+    //// reset_values
+    //reset_values(vec_mul, cols);
+    //reset_values(vec_add, rows);
+    //reset_values(matrix, cols*rows);
+
+    //trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive);
+
+    //print(res_naive, rows, 1);
 }
