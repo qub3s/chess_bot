@@ -92,7 +92,7 @@ fn train_batch(network: *train_network, lr: f32) void {
     network.network.eval = true;
 }
 
-pub fn train(networks: []train_network, games_until_training: u32, threads: u32, lr: f32, _: f32, epochs: u32) !void {
+pub fn train(networks: []train_network, games_until_training: u32, threads: u32, lr: f32, rng: f32, epochs: u32) !void {
     var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var rand = rnd.random();
 
@@ -113,8 +113,8 @@ pub fn train(networks: []train_network, games_until_training: u32, threads: u32,
             try networks[idx_w].network.copy(cpy_w);
             try networks[idx_b].network.copy(cpy_b);
 
-            //try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
-            try p.spawn(check_general_speed, .{});
+            try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
+            //try p.spawn(check_general_speed, .{});
             //try p.spawn(compete_eve_single_eval, .{ cpy_w, cpy_b, 5, 0.01 });
         }
         p.finish();
