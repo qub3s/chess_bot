@@ -24,13 +24,9 @@ pub fn gemv(T: type, A_rows: usize, A_cols: usize, A: []T, trans_a: bool, V: []T
 
 pub fn mvmult(rows: usize, cols: usize, trans_mat: bool, mat: []f32, x: []f32, b: []f32, res: []f32) void {
     if (trans_mat) {
-        mvmultc.trans_naive_algo(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
+        mvmultc.trans_mat_vec_AVX2(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
     } else {
-        if (cols % 8 != 0 or rows % 8 != 0) {
-            mvmultc.naive_algo(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
-        } else {
-            mvmultc.mat_vec_AVX2(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
-        }
+        mvmultc.mat_vec_AVX2(@intCast(cols), @intCast(rows), mat.ptr, b.ptr, x.ptr, res.ptr);
     }
 }
 

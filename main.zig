@@ -22,8 +22,6 @@ const Error = error{
     ErrorLogic,
 };
 
-const max_game_len: usize = 300;
-
 fn two_mm_calc_min_move(engine: *nn.Network(f32), board: *logic.Board_s) !f32 {
     var pos_moves = std.ArrayList(logic.move).init(gpa);
     defer pos_moves.deinit();
