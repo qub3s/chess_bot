@@ -135,8 +135,8 @@ pub fn LinearLayer(comptime T: type) type {
             @memset(result, 0);
 
             // das hier funktioniert noch nicht
-            //blas.mvmult(self.outdim, self.indim, true, self.weight, input, result, result);
-            blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
+            blas.mvmult(self.outdim, self.indim, true, self.weight, input, result, result);
+            //blas.gemv(T, self.outdim, self.indim, self.weight, true, input, result, 1, 1);
         }
 
         pub fn step(self: *@This(), lr: T) !void {

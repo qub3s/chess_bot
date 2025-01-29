@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("zcsv", zcsv.module("zcsv"));
 
     exe.linkLibrary(simd);
-    exe.linkSystemLibrary("flexiblas");
+    //exe.linkSystemLibrary("flexiblas");
     exe.linkSystemLibrary("raylib");
 
     exe.addIncludePath(b.path("c_src/simd/"));

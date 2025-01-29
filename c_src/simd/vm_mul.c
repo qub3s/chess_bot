@@ -122,111 +122,111 @@ void print_bool(int x){
     }
 }
 
-void matrix_test(int scale_cols, int scale_rows){
-    int cols = 8 * scale_cols;
-    int rows = 8 * scale_rows;
+//void matrix_test(int scale_cols, int scale_rows){
+//    int cols = 8 * scale_cols;
+//    int rows = 8 * scale_rows;
+//
+//    clock_t time;
+//
+//    float *vec_mul; 
+//    vec_mul = malloc(cols * sizeof(float)); 
+//
+//    float *vec_add; 
+//    vec_add = malloc(rows * sizeof(float));
+//
+//    float *matrix;
+//    matrix= malloc(rows * cols * sizeof(float));
+//
+//    float res_blas[rows];
+//    float res_avx[rows];
+//    float res_naive[rows];
+//
+//    // set values
+//    reset_values(vec_mul, cols);
+//    reset_values(vec_add, rows);
+//    reset_values(matrix, rows*cols);
+//
+//    time = clock();
+//    cblas_sgemv(CblasRowMajor, CblasNoTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
+//    time = clock() - time;
+//    printf("%f\n", (float)time/CLOCKS_PER_SEC);
+//
+//    for(int x = 0; x < rows; x++){
+//        res_blas[x] = vec_add[x];
+//    }
+//    print(res_blas, rows, 1);
+//
+//    // reset_values
+//    reset_values(vec_mul, cols);
+//    reset_values(vec_add, rows);
+//    reset_values(matrix, rows*cols);
+//
+//    time = clock();
+//    mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
+//    time = clock() - time;
+//    printf("%f\n", (float)time/CLOCKS_PER_SEC);
+//
+//    print(res_avx, rows, 1);
+//
+//    time = clock();
+//    naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive); 
+//    time = clock() - time;
+//    printf("%f\n", (float)time/CLOCKS_PER_SEC);
+//
+//    print(res_naive, rows, 1);
+//}
 
-    clock_t time;
-
-    float *vec_mul; 
-    vec_mul = malloc(cols * sizeof(float)); 
-
-    float *vec_add; 
-    vec_add = malloc(rows * sizeof(float));
-
-    float *matrix;
-    matrix= malloc(rows * cols * sizeof(float));
-
-    float res_blas[rows];
-    float res_avx[rows];
-    float res_naive[rows];
-
-    // set values
-    reset_values(vec_mul, cols);
-    reset_values(vec_add, rows);
-    reset_values(matrix, rows*cols);
-
-    time = clock();
-    cblas_sgemv(CblasRowMajor, CblasNoTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
-    time = clock() - time;
-    printf("%f\n", (float)time/CLOCKS_PER_SEC);
-
-    for(int x = 0; x < rows; x++){
-        res_blas[x] = vec_add[x];
-    }
-    print(res_blas, rows, 1);
-
-    // reset_values
-    reset_values(vec_mul, cols);
-    reset_values(vec_add, rows);
-    reset_values(matrix, rows*cols);
-
-    time = clock();
-    mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
-    time = clock() - time;
-    printf("%f\n", (float)time/CLOCKS_PER_SEC);
-
-    print(res_avx, rows, 1);
-
-    time = clock();
-    naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive); 
-    time = clock() - time;
-    printf("%f\n", (float)time/CLOCKS_PER_SEC);
-
-    print(res_naive, rows, 1);
-}
-
-void trans_matrix_test(int scale_cols, int scale_rows){
-    int cols = 8 * scale_cols;
-    int rows = 8 * scale_rows;
-
-    clock_t time;
-
-    float *vec_mul; 
-    vec_mul = malloc(rows * sizeof(float)); 
-
-    float *vec_add; 
-    vec_add = malloc(cols * sizeof(float));
-
-    float *matrix;
-    matrix= malloc(rows * cols * sizeof(float));
-
-    float res_blas[cols];
-    float res_avx[cols];
-    float res_naive[cols];
-
-    reset_values(vec_mul, rows);
-    reset_values(vec_add, cols);
-    reset_values(matrix, rows*cols);
-
-    time = clock();
-    cblas_sgemv(CblasRowMajor, CblasTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
-    time = clock() - time;
-    printf("%f\n", (float)time/CLOCKS_PER_SEC);
-
-    for(int x = 0; x < cols; x++){
-        res_blas[x] = vec_add[x];
-    }
-    print(res_blas, cols, 1);
-
-    reset_values(vec_mul, rows);
-    reset_values(vec_add, cols);
-    reset_values(matrix, rows*cols);
-
-    time = clock();
-    trans_mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
-    time = clock() - time;
-    printf("%f\n", (float)time/CLOCKS_PER_SEC);
-
-    print(res_avx, cols, 1);
-
-    time = clock();
-    trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive); 
-    time = clock() - time;
-    printf("%f\n", (float)time/CLOCKS_PER_SEC);
-
-    print(res_naive, cols, 1);
-}
+//void trans_matrix_test(int scale_cols, int scale_rows){
+//    int cols = 8 * scale_cols;
+//    int rows = 8 * scale_rows;
+//
+//    clock_t time;
+//
+//    float *vec_mul; 
+//    vec_mul = malloc(rows * sizeof(float)); 
+//
+//    float *vec_add; 
+//    vec_add = malloc(cols * sizeof(float));
+//
+//    float *matrix;
+//    matrix= malloc(rows * cols * sizeof(float));
+//
+//    float res_blas[cols];
+//    float res_avx[cols];
+//    float res_naive[cols];
+//
+//    reset_values(vec_mul, rows);
+//    reset_values(vec_add, cols);
+//    reset_values(matrix, rows*cols);
+//
+//    time = clock();
+//    cblas_sgemv(CblasRowMajor, CblasTrans, rows, cols, 1, matrix, cols, vec_mul, 1, 1, vec_add, 1 ); 
+//    time = clock() - time;
+//    printf("%f\n", (float)time/CLOCKS_PER_SEC);
+//
+//    for(int x = 0; x < cols; x++){
+//        res_blas[x] = vec_add[x];
+//    }
+//    print(res_blas, cols, 1);
+//
+//    reset_values(vec_mul, rows);
+//    reset_values(vec_add, cols);
+//    reset_values(matrix, rows*cols);
+//
+//    time = clock();
+//    trans_mat_vec_AVX2(cols, rows, matrix, vec_add, vec_mul, res_avx); 
+//    time = clock() - time;
+//    printf("%f\n", (float)time/CLOCKS_PER_SEC);
+//
+//    print(res_avx, cols, 1);
+//
+//    time = clock();
+//    trans_naive_algo(cols, rows, matrix, vec_add, vec_mul, res_naive); 
+//    time = clock() - time;
+//    printf("%f\n", (float)time/CLOCKS_PER_SEC);
+//
+//    print(res_naive, cols, 1);
+//}
 
 
 
