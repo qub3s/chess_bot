@@ -73,22 +73,20 @@ fn train_batch(network: *train_network, lr: f32) void {
     var err: [1]f32 = .{0};
     network.network.eval = false;
 
-    for (0..10) |_| {
-        while (network.train_data.list.items.len != 0) {
-            const X_raw = network.train_data.pop() catch return;
-            var X: [768]f32 = mem.zeroes([768]f32);
-            X_raw.board.get_input(&X);
+    while (network.train_data.list.items.len != 0) {
+        const X_raw = network.train_data.pop() catch return;
+        var X: [768]f32 = mem.zeroes([768]f32);
+        X_raw.board.get_input(&X);
 
-            var y: [1]f32 = undefined;
-            y[0] = X_raw.value;
+        var y: [1]f32 = undefined;
+        y[0] = X_raw.value;
 
-            network.network.fp(&X, &y, &res, &err) catch return;
-            network.network.bp(&y) catch return;
-        }
-
-        network.network.step(lr) catch return;
+        network.network.fp(&X, &y, &res, &err) catch return;
+        network.network.bp(&y) catch return;
     }
+    network.network.step(lr) catch return;
 
+    std.debug.print("Array_size: {}\n", .{network.train_data.list.items.len});
     network.network.eval = true;
 }
 
@@ -120,6 +118,7 @@ pub fn train(networks: []train_network, games_until_training: u32, threads: u32,
         p.finish();
 
         // gradient descent1
+        std.debug.print("train\n", .{});
         for (0..networks.len) |i| {
             try p.spawn(train_batch, .{ &networks[i], lr });
         }

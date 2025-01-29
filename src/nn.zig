@@ -755,9 +755,9 @@ pub fn main() !void {
     const gpa = general_purpose_alloc.allocator();
     const T = f32;
 
-    try benchmarking(gpa);
-
     try overfit_linear_layer(T, gpa);
+
+    try benchmarking(gpa);
 
     const seed = 42;
     var model = Network(T).init(gpa, true);

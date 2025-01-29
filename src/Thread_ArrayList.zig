@@ -19,7 +19,7 @@ pub fn Thread_ArrayList(comptime T: type) type {
         pub fn append(self: *@This(), inp: T) !void {
             if (!self.mutex_ressources.tryLock()) {
                 self.mutex_ressources.lock();
-                std.debug.print("failed lock\n", .{});
+                //std.debug.print("failed lock\n", .{});
             }
             try self.list.append(inp);
             self.mutex_ressources.unlock();
@@ -30,7 +30,7 @@ pub fn Thread_ArrayList(comptime T: type) type {
             self.sem.wait();
             if (!self.mutex_ressources.tryLock()) {
                 self.mutex_ressources.lock();
-                std.debug.print("failed lock\n", .{});
+                //std.debug.print("failed lock\n", .{});
             }
 
             const ret = self.list.pop();

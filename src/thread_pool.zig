@@ -63,7 +63,7 @@ pub fn spawn(pool: *Pool, comptime func: anytype, args: anytype) !void {
 
     if (!pool.mutex_ressources.tryLock()) {
         pool.mutex_ressources.lock();
-        std.debug.print("failed lock\n", .{});
+        //std.debug.print("failed lock\n", .{});
     }
 
     const process: *process_container = try pool.allocator.create(process_container);
@@ -84,7 +84,7 @@ fn worker(pool: *Pool) void {
     while (true) {
         if (!pool.mutex_ressources.tryLock()) {
             pool.mutex_ressources.lock();
-            std.debug.print("failed lock\n", .{});
+            //std.debug.print("failed lock\n", .{});
         }
 
         // kill worker
