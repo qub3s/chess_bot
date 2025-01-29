@@ -340,7 +340,8 @@ pub fn Network(comptime T: type) type {
         allocation_field: []T,
 
         pub fn init(allocator: std.mem.Allocator, eval: bool) Network(T) {
-            return Network(T){ .layer = std.ArrayList(LayerType(T)).init(allocator), .Allocator = allocator, .eval = eval, .max_layer_size = 0, .allocation_field = undefined };
+            var tmp = [1]T{0};
+            return Network(T){ .layer = std.ArrayList(LayerType(T)).init(allocator), .Allocator = allocator, .eval = eval, .max_layer_size = 0, .allocation_field = &tmp };
         }
 
         pub fn copy(self: *@This(), net: *Network(T)) !void {
@@ -397,11 +398,17 @@ pub fn Network(comptime T: type) type {
 
             if (self.max_layer_size < indim) {
                 self.max_layer_size = @intCast(indim);
+                if (self.allocation_field.len != 1) {
+                    self.Allocator.free(self.allocation_field);
+                }
                 self.allocation_field = try self.Allocator.alloc(T, self.max_layer_size);
             }
 
             if (self.max_layer_size < outdim) {
                 self.max_layer_size = @intCast(outdim);
+                if (self.allocation_field.len != 1) {
+                    self.Allocator.free(self.allocation_field);
+                }
                 self.allocation_field = try self.Allocator.alloc(T, self.max_layer_size);
             }
         }
@@ -462,6 +469,7 @@ pub fn Network(comptime T: type) type {
                     },
                 };
             }
+            self.Allocator.free(bp_v);
         }
 
         pub fn step(self: *@This(), lr: T) !void {

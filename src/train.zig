@@ -85,12 +85,10 @@ fn train_batch(network: *train_network, lr: f32) void {
         network.network.bp(&y) catch return;
     }
     network.network.step(lr) catch return;
-
-    std.debug.print("Array_size: {}\n", .{network.train_data.list.items.len});
     network.network.eval = true;
 }
 
-pub fn train(networks: []train_network, games_until_training: u32, threads: u32, lr: f32, rng: f32, epochs: u32) !void {
+pub fn train(allocator: std.mem.Allocator, networks: []train_network, games_until_training: u32, threads: u32, lr: f32, rng: f32, epochs: u32) !void {
     var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var rand = rnd.random();
 
@@ -105,19 +103,19 @@ pub fn train(networks: []train_network, games_until_training: u32, threads: u32,
             const idx_w = rand.intRangeAtMost(usize, 0, networks.len - 1);
             const idx_b = rand.intRangeAtMost(usize, 0, networks.len - 1);
 
-            const cpy_w: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
-            const cpy_b: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
+            const cpy_w: *nn.Network(f32) = allocator.create(nn.Network(f32)) catch return;
+            const cpy_b: *nn.Network(f32) = allocator.create(nn.Network(f32)) catch return;
 
             try networks[idx_w].network.copy(cpy_w);
             try networks[idx_b].network.copy(cpy_b);
 
-            try p.spawn(play_eve_single_eval, .{ gpa, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
+            try p.spawn(play_eve_single_eval, .{ allocator, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
             //try p.spawn(check_general_speed, .{});
             //try p.spawn(compete_eve_single_eval, .{ cpy_w, cpy_b, 5, 0.01 });
         }
         p.finish();
 
-        // gradient descent1
+        // gradient descent
         std.debug.print("train\n", .{});
         for (0..networks.len) |i| {
             try p.spawn(train_batch, .{ &networks[i], lr });
@@ -140,8 +138,11 @@ pub fn train(networks: []train_network, games_until_training: u32, threads: u32,
                 } else {
                     networks[networks.len - 1].network.copy(new) catch return;
                 }
+
+                networks[i].network.free();
+                //allocator.destroy(networks[i].network.free());
                 networks[i].network = new;
-                std.debug.print("replaced_movel\n", .{});
+                std.debug.print("replaced model\n", .{});
             }
             networks[i].reset_score();
         }
@@ -160,11 +161,24 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
 
     var result: i32 = undefined;
 
-    var moves = std.ArrayList(board_evaluation).initCapacity(gpas, 512) catch return;
+    var moves = std.ArrayList(board_evaluation).initCapacity(gpas, 512) catch {
+        network_w.free();
+        network_b.free();
+        allocator.destroy(network_w);
+        allocator.destroy(network_b);
+        return;
+    };
     defer moves.deinit();
 
     while (true) {
-        var pos_moves = std.ArrayList(logic.move).initCapacity(gpas, 64) catch return;
+        var pos_moves = std.ArrayList(logic.move).initCapacity(gpas, 64) catch {
+            network_w.free();
+            network_b.free();
+            allocator.destroy(network_w);
+            allocator.destroy(network_b);
+            std.debug.print("free\n", .{});
+            return;
+        };
         defer pos_moves.deinit();
         board.possible_moves(&pos_moves) catch break;
 
@@ -197,6 +211,7 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                         network_b.free();
                         allocator.destroy(network_w);
                         allocator.destroy(network_b);
+                        std.debug.print("free\n", .{});
                         return;
                     };
                     //const ev = minimax(&move_to_eval, network_w, 1) catch {
@@ -213,6 +228,7 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                         network_b.free();
                         allocator.destroy(network_w);
                         allocator.destroy(network_b);
+                        std.debug.print("free\n", .{});
                         return;
                     };
                     //const ev = minimax(&move_to_eval, network_b, 1) catch {

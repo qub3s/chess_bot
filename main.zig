@@ -229,7 +229,7 @@ pub fn main() !void {
     //networks[5] = train.train_network.init(d);
     //networks[6] = train.train_network.init(e);
 
-    try train.train(&networks, 10, 12, 0.01, 0.01, 10000);
+    try train.train(gpa, &networks, 1000, 12, 0.01, 0.01, 10000);
     //try train.compete_eve_single_eval(a, b, 100, 0.01);
     //std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
     //for (0..100) |_| {
