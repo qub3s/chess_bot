@@ -259,6 +259,20 @@ pub const Board_s = struct {
                 const y: i32 = @intCast(i / 8);
                 const white = board.pieces[i] < 7;
 
+                // king moves
+                if (board.pieces[i] == 1 or board.pieces[i] == 7) {
+                    const x_change = [_]i32{ 1, -1, 0, 0, 1, 1, -1, -1 };
+                    const y_change = [_]i32{ 0, 0, 1, -1, 1, -1, -1, 1 };
+
+                    for (x_change, y_change) |xc, yc| {
+                        if (valid_move(board, x + xc, y + yc, white)) {
+                            if (board.pieces[@intCast(x + xc + (y + yc) * 8)] == 1 or board.pieces[@intCast(x + xc + (y + yc) * 8)] == 7) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
                 // queen moves
                 if (board.pieces[i] == lower_bound + 2) {
                     const x_change = [_]i32{ 1, -1, 0, 0, 1, 1, -1, -1 };
@@ -352,8 +366,9 @@ pub const Board_s = struct {
                         }
                     }
                 }
+
                 // add pawn white moves
-                if (board.pieces[i] == 7) {
+                if (board.pieces[i] == 6) {
                     // capture left
                     if (valid_move(board, x - 1, y + 1, white)) {
                         if (board.pieces[@intCast(x - 1 + (y + 1) * 8)] == king_value) {
@@ -368,6 +383,7 @@ pub const Board_s = struct {
                         }
                     }
                 }
+
                 // add black pawn moves
                 if (board.pieces[i] == 12) {
                     // capture left

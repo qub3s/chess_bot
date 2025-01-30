@@ -231,8 +231,8 @@ pub fn main() !void {
     //networks[5] = train.train_network.init(d);
     //networks[6] = train.train_network.init(e);
 
-    //try v_play_hvh();
-    //_ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0.01);
+    try v_play_hvh();
+    _ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0.01);
     //try train.train(gpa, &networks, 1000, 12, 0.01, 0.01, 10000);
     train.compete_eve_single_eval(a, b, 100, 0.01);
     //std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
