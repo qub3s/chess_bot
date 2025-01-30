@@ -202,7 +202,7 @@ pub fn main() !void {
 
     const a: *nn.Network(T) = try gpa.create(nn.Network(T));
     try model.copy(a);
-    try a.load("1.model");
+    //try a.load("1.model");
 
     const b: *nn.Network(T) = try gpa.create(nn.Network(T));
     try model.copy(b);
@@ -225,16 +225,16 @@ pub fn main() !void {
     var networks: [5]train.train_network = undefined;
     networks[0] = train.train_network.init(a);
     networks[1] = train.train_network.init(b);
-    networks[2] = train.train_network.init(c);
-    networks[3] = train.train_network.init(d);
-    networks[4] = train.train_network.init(e);
+    //networks[2] = train.train_network.init(c);
+    //networks[3] = train.train_network.init(d);
+    //networks[4] = train.train_network.init(e);
     //networks[5] = train.train_network.init(d);
     //networks[6] = train.train_network.init(e);
 
-    try v_play_hvh();
-    _ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0.01);
-    //try train.train(gpa, &networks, 1000, 12, 0.01, 0.01, 10000);
-    train.compete_eve_single_eval(a, b, 100, 0.01);
+    //try v_play_hvh();
+    //_ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0);
+    try train.train(gpa, &networks, 3000, 12, 0.01, 0.01, 10000);
+    //train.compete_eve_single_eval(a, b, 100, 0.01);
     //std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
     //for (0..100) |_| {
     //    std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});

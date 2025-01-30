@@ -183,6 +183,7 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
         board.possible_moves(&pos_moves) catch break;
 
         const mate = board.check_mate() catch break;
+
         if (board.check_repetition() or pos_moves.items.len == 0) {
             if (pos_moves.items.len == 0 and mate) {
                 result = board.get_winner();
@@ -214,13 +215,6 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                         std.debug.print("free\n", .{});
                         return;
                     };
-                    //const ev = minimax(&move_to_eval, network_w, 1) catch {
-                    //    network_w.free();
-                    //    network_b.free();
-                    //    allocator.destroy(network_w);
-                    //    allocator.destroy(network_b);
-                    //    return;
-                    //};
                     val = ev + rnd_num;
                 } else {
                     const ev = eval_board(&move_to_eval, network_w) catch {
@@ -231,13 +225,6 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
                         std.debug.print("free\n", .{});
                         return;
                     };
-                    //const ev = minimax(&move_to_eval, network_b, 1) catch {
-                    //    network_w.free();
-                    //    network_b.free();
-                    //    allocator.destroy(network_w);
-                    //    allocator.destroy(network_b);
-                    //    return;
-                    //};
                     val = ev + rnd_num;
                 }
             }
@@ -253,14 +240,14 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
         moves.append(board_evaluation{ .board = board.copy(), .value = 0 }) catch break;
     }
 
-    if (result != 0) {
+    if (true) {
         w_tn.add_score(@floatFromInt(result));
         b_tn.add_score(@floatFromInt(result * -1));
 
         for (0..moves.items.len) |i| {
             // start with black eval
-            moves.items[i].value = @floatFromInt(result);
             result *= -1;
+            moves.items[i].value = @floatFromInt(result);
 
             if (@mod(i, 2) == 0) {
                 b_tn.train_data.append(moves.items[i]) catch break;
