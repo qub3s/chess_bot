@@ -259,6 +259,7 @@ pub const Board_s = struct {
                 const y: i32 = @intCast(i / 8);
                 const white = board.pieces[i] < 7;
 
+                // queen moves
                 if (board.pieces[i] == lower_bound + 2) {
                     const x_change = [_]i32{ 1, -1, 0, 0, 1, 1, -1, -1 };
                     const y_change = [_]i32{ 0, 0, 1, -1, 1, -1, -1, 1 };
@@ -284,6 +285,7 @@ pub const Board_s = struct {
                     }
                 }
 
+                // rook moves
                 if (board.pieces[i] == lower_bound + 3) {
                     const x_change = [_]i32{ 1, -1, 0, 0 };
                     const y_change = [_]i32{ 0, 0, 1, -1 };
@@ -351,7 +353,7 @@ pub const Board_s = struct {
                     }
                 }
                 // add pawn white moves
-                if (board.pieces[i] == lower_bound + 6) {
+                if (board.pieces[i] == 7) {
                     // capture left
                     if (valid_move(board, x - 1, y + 1, white)) {
                         if (board.pieces[@intCast(x - 1 + (y + 1) * 8)] == king_value) {
@@ -362,6 +364,22 @@ pub const Board_s = struct {
                     // capture right
                     if (valid_move(board, x + 1, y + 1, white)) {
                         if (board.pieces[@intCast(x + 1 + (y + 1) * 8)] == king_value) {
+                            return true;
+                        }
+                    }
+                }
+                // add black pawn moves
+                if (board.pieces[i] == 12) {
+                    // capture left
+                    if (valid_move(board, x - 1, y - 1, white)) {
+                        if (board.pieces[@intCast(x - 1 + (y - 1) * 8)] == king_value) {
+                            return true;
+                        }
+                    }
+
+                    // capture right
+                    if (valid_move(board, x + 1, y - 1, white)) {
+                        if (board.pieces[@intCast(x + 1 + (y - 1) * 8)] == king_value) {
                             return true;
                         }
                     }

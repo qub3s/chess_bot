@@ -114,7 +114,7 @@ fn v_play_hvh() !void {
     }
 }
 
-fn v_play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32), randomness: f32) !i32 {
+fn v_play_eve_minimax(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32), randomness: f32) !i32 {
     var num_move: i32 = 0;
     var board = logic.Board_s.init();
 
@@ -127,7 +127,7 @@ fn v_play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32)
     vis.ray.InitWindow(screenWidth, screenHeight, "");
     defer vis.ray.CloseWindow();
     try vis.load_piece_textures();
-    vis.ray.SetTargetFPS(10);
+    vis.ray.SetTargetFPS(2);
 
     var result: i32 = undefined;
 
@@ -178,6 +178,7 @@ fn v_play_eve_single_eval(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32)
             }
         }
 
+        print("{}\n", .{min_value});
         board.make_move_m(pos_moves.items[min]);
         num_move += 1;
     }
@@ -201,6 +202,7 @@ pub fn main() !void {
 
     const a: *nn.Network(T) = try gpa.create(nn.Network(T));
     try model.copy(a);
+    try a.load("1.model");
 
     const b: *nn.Network(T) = try gpa.create(nn.Network(T));
     try model.copy(b);
@@ -229,8 +231,10 @@ pub fn main() !void {
     //networks[5] = train.train_network.init(d);
     //networks[6] = train.train_network.init(e);
 
-    try train.train(gpa, &networks, 1000, 12, 0.01, 0.01, 10000);
-    //try train.compete_eve_single_eval(a, b, 100, 0.01);
+    //try v_play_hvh();
+    //_ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0.01);
+    //try train.train(gpa, &networks, 1000, 12, 0.01, 0.01, 10000);
+    train.compete_eve_single_eval(a, b, 100, 0.01);
     //std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
     //for (0..100) |_| {
     //    std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});

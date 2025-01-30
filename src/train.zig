@@ -365,7 +365,7 @@ pub fn compete_eve_single_eval(network_A: *nn.Network(f32), network_B: *nn.Netwo
 
 pub fn minimax(board: *logic.Board_s, model: *nn.Network(f32), level: u32) !f32 {
     if (level == 0) {
-        return eval_board(board.*, model);
+        return eval_board(board, model);
     }
 
     var pos_moves = std.ArrayList(logic.move).init(gpa);
