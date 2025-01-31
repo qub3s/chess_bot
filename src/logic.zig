@@ -9,8 +9,6 @@ const Error = error{OutOfMemory};
 pub const move = struct { x1: i32, y1: i32, x2: i32, y2: i32 };
 
 pub const Board_s = struct {
-    white_castled: bool,
-    black_castled: bool,
     pieces: [64]i32,
     white_to_move: bool,
     draw_counter: u32,

@@ -3,6 +3,7 @@ const logic = @import("logic.zig");
 const nn = @import("nn.zig");
 const thread_list = @import("Thread_ArrayList.zig");
 const tpool = @import("thread_pool.zig");
+const static = @import("static_eval.zig");
 
 const mem = std.mem;
 
@@ -110,8 +111,6 @@ pub fn train(allocator: std.mem.Allocator, networks: []train_network, games_unti
             try networks[idx_b].network.copy(cpy_b);
 
             try p.spawn(play_eve_single_eval, .{ allocator, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
-            //try p.spawn(check_general_speed, .{});
-            //try p.spawn(compete_eve_single_eval, .{ cpy_w, cpy_b, 5, 0.01 });
         }
         p.finish();
 
@@ -129,23 +128,23 @@ pub fn train(allocator: std.mem.Allocator, networks: []train_network, games_unti
         }
 
         // check if model should be replaced
-        for (0..networks.len) |i| {
-            if (networks[i].score / @as(f32, @floatFromInt(networks[i].games)) < 0.25) {
-                // memory leak here that is ignored
-                const new: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
-                if (i != 0) {
-                    networks[i - 1].network.copy(new) catch return;
-                } else {
-                    networks[networks.len - 1].network.copy(new) catch return;
-                }
+        //for (0..networks.len) |i| {
+        //    if (networks[i].score / @as(f32, @floatFromInt(networks[i].games)) < 0.25) {
+        //        // memory leak here that is ignored
+        //        const new: *nn.Network(f32) = gpa.create(nn.Network(f32)) catch return;
+        //        if (i != 0) {
+        //            networks[i - 1].network.copy(new) catch return;
+        //        } else {
+        //            networks[networks.len - 1].network.copy(new) catch return;
+        //        }
 
-                networks[i].network.free();
-                //allocator.destroy(networks[i].network.free());
-                networks[i].network = new;
-                std.debug.print("replaced model\n", .{});
-            }
-            networks[i].reset_score();
-        }
+        //        networks[i].network.free();
+        //        //allocator.destroy(networks[i].network.free());
+        //        networks[i].network = new;
+        //        std.debug.print("replaced model\n", .{});
+        //    }
+        //    networks[i].reset_score();
+        //}
     }
 }
 
@@ -261,16 +260,6 @@ fn play_eve_single_eval(allocator: std.mem.Allocator, network_w: *nn.Network(f32
     network_b.free();
     allocator.destroy(network_w);
     allocator.destroy(network_b);
-}
-
-fn check_general_speed() void {
-    var board = logic.Board_s.init();
-    var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return;
-    defer pos_moves.deinit();
-
-    for (0..10000000) |_| {
-        board.possible_moves(&pos_moves) catch return;
-    }
 }
 
 pub fn compete_eve_single_eval(network_A: *nn.Network(f32), network_B: *nn.Network(f32), games: u32, randomness: f32) void {
@@ -415,4 +404,221 @@ pub fn eval_board(board: *logic.Board_s, model: *nn.Network(f32)) !f32 {
     board.get_input(&input);
     try model.fp(&input, &sol, &result, &err);
     return result[0];
+}
+
+// handles the inversion
+pub fn static_eval(board: *logic.Board_s, model: static.static_analysis) f32 {
+    var res = std.mem.zeroes([64]f32);
+
+    if (!board.white_to_move) {
+        board.inverse_board(&res);
+    } else {
+        @memcpy(res, board.pieces);
+    }
+
+    var large = std.mem.zeroes([768]f32);
+    logic.Board_s.get_board_768(res, &large);
+
+    return model.eval(large);
+}
+
+// doesnt work nega max
+pub fn static_alpha_beta_max(board: *logic.Board_s, model: static.static_analysis, depth: u32, alpha: f32, beta: f32) f32 {
+    if (depth == 0) {
+        return static_eval(board, model);
+    }
+
+    var max = alpha;
+
+    var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return max;
+    defer pos_moves.deinit();
+    board.possible_moves(&pos_moves) catch return max;
+
+    const mate = board.check_mate() catch return max;
+
+    if (board.check_repetition() or pos_moves.items.len == 0) {
+        if (pos_moves.items.len == 0 and mate) {
+            if (board.white_to_move) {
+                return std.math.inf(f32) * board.get_winner();
+            } else {
+                return std.math.inf(f32) * board.get_winner();
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    for (0..pos_moves.items.len) |i| {
+        var move_to_eval = board.copy();
+        move_to_eval.make_move_m(pos_moves.items[i]);
+
+        const val = static_alpha_beta_max(board, model, depth - 1, max, beta);
+
+        if (val < max) {
+            max = val;
+            if (max >= beta) {
+                break;
+            }
+        }
+    }
+    return max;
+}
+
+// doesnt work nega max
+pub fn static_alpha_beta_min(board: *logic.Board_s, model: static.static_analysis, depth: u32, alpha: f32, beta: f32) f32 {
+    if (depth == 0) {
+        return static_eval(board, model);
+    }
+
+    var min = beta;
+
+    var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return min;
+    defer pos_moves.deinit();
+    board.possible_moves(&pos_moves) catch return min;
+
+    const mate = board.check_mate() catch return min;
+
+    if (board.check_repetition() or pos_moves.items.len == 0) {
+        if (pos_moves.items.len == 0 and mate) {
+            if (board.white_to_move) {
+                return std.math.inf(f32) * board.get_winner();
+            } else {
+                return std.math.inf(f32) * board.get_winner();
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    for (0..pos_moves.items.len) |i| {
+        var move_to_eval = board.copy();
+        move_to_eval.make_move_m(pos_moves.items[i]);
+
+        const val = static_alpha_beta_max(board, model, depth - 1, alpha, min);
+
+        if (val < min) {
+            min = val;
+            if (min <= alpha) {
+                break;
+            }
+        }
+    }
+    return min;
+}
+
+pub fn negaMax(board: *logic.Board_s, model: static.static_analysis, depth: u32){
+    if (depth == 0) {
+        return static_eval(board, model);
+    }
+
+    var max = -std.math.inf(f32);
+
+    var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return min;
+    defer pos_moves.deinit();
+    board.possible_moves(&pos_moves) catch return min;
+
+    const mate = board.check_mate() catch return min;
+    if (board.check_repetition() or pos_moves.items.len == 0) {
+        if (pos_moves.items.len == 0 and mate) {
+                return -std.math.inf(f32); 
+        }
+        return 0;
+    }
+
+    for(0..pos_moves.items.len) |i| {
+        var move_to_eval = board.copy();
+        move_to_eval.make_move_m(pos_moves.items[i]);
+
+        var val = -negaMax(move_to_eval, model, depth-1);
+
+        if( val > max ){
+            max = val;
+        }
+    }
+
+    return max;
+}
+
+pub fn play_static(model_a: static.static_analysis, model_b: static.static_analysis, save_a: *static.static_analysis, save_b: *static.static_analysis) void {
+    var num_move: i32 = 0;
+    var board = logic.Board_s.init();
+
+    var result: i32 = undefined;
+
+    while (true) {
+        var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return;
+        defer pos_moves.deinit();
+        board.possible_moves(&pos_moves) catch break;
+
+        const mate = board.check_mate() catch break;
+
+        if (board.check_repetition() or pos_moves.items.len == 0) {
+            if (pos_moves.items.len == 0 and mate) {
+                result = board.get_winner();
+            } else {
+                result = 0;
+            }
+            break;
+        }
+
+        var min: usize = 0;
+        var min_value: f32 = std.math.inf(f32);
+
+        for (0..pos_moves.items.len) |i| {
+            var val: f32 = undefined;
+
+            var move_to_eval = board.copy();
+            move_to_eval.make_move_m(pos_moves.items[i]);
+
+            if (move_to_eval.check_win() != 0) {
+                val = -std.math.inf(f32);
+            } else {
+                if (@mod(num_move, 2) == 0) {
+                    val = negaMax(move_to_eval, model_a, 3);
+                } else {
+                    val = negaMax(move_to_eval, model_b, 3); 
+                }
+            }
+
+            if (val < min_value) {
+                min_value = val;
+                min = i;
+            }
+        }
+
+        board.make_move_m(pos_moves.items[min]);
+        num_move += 1;
+    }
+
+    if (result == 1) {
+        save_a.add(model_a);
+    }
+
+    if (result == -1) {
+        save_b.add(model_b);
+    }
+}
+
+pub fn train_static(eval: []static.static_analysis, threads: u32, epochs: u32, runs_before_step: u32) !void {
+    var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    var rand = rnd.random();
+
+    var p: tpool.Pool = undefined;
+    p.init(gpa, threads);
+
+    for (0..epochs) |_| {
+        for (0..eval.len * runs_before_step / 2) |_| {
+            const idx_w = rand.intRangeAtMost(usize, 0, eval.len - 1);
+            const idx_b = rand.intRangeAtMost(usize, 0, eval.len - 1);
+
+            _ = eval[idx_w].copy();
+            _ = eval[idx_b].copy();
+
+            //try p.spawn(play_eve_single_eval, .{ allocator, cpy_w, &networks[idx_w], cpy_b, &networks[idx_b], rng });
+        }
+
+        for (0..eval.len) |i| {
+            eval[i].step();
+        }
+    }
 }

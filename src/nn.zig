@@ -633,7 +633,7 @@ pub fn parseFile(fileName: []const u8, alloc: std.mem.Allocator) !std.ArrayList(
 }
 
 pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
-    const num_batches = 100;
+    const num_batches = 120;
     const batchsize = 100;
     const lr = 0.01;
 
@@ -645,7 +645,7 @@ pub fn overfit_linear_layer(T: type, gpa: std.mem.Allocator) !void {
 
     var net = Network(T).init(gpa, false);
     try net.add_LinearLayer(inp1, out1, 42);
-    //try net.add_ReLU(inp2);
+    try net.add_ReLU(inp2);
     try net.add_LinearLayer(inp2, out2, 42);
     try net.add_MSE(1);
 

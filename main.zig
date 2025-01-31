@@ -6,6 +6,7 @@ const logic = @import("src/logic.zig");
 const vis = @import("src/visualize.zig");
 const tpool = @import("src/thread_pool.zig");
 const train = @import("src/train.zig");
+const static = @import("src/static_eval.zig");
 
 pub const ray = @cImport({
     @cInclude("raylib.h");
@@ -190,50 +191,54 @@ pub fn main() !void {
     ray.SetTraceLogLevel(5);
     //try v_play_hvh();
 
-    const T: type = f32;
-    const seed = 33;
-    var model = nn.Network(T).init(gpa, true);
-    try model.add_LinearLayer(768, 64, seed);
-    try model.add_ReLU(64);
-    try model.add_LinearLayer(64, 32, seed);
-    try model.add_ReLU(32);
-    try model.add_LinearLayer(32, 1, seed);
-    try model.add_MSE(1);
+    //const T: type = f32;
+    //const seed = 33;
+    //var model = nn.Network(T).init(gpa, true);
+    //try model.add_LinearLayer(768, 64, seed);
+    //try model.add_ReLU(64);
+    //try model.add_LinearLayer(64, 32, seed);
+    //try model.add_ReLU(32);
+    //try model.add_LinearLayer(32, 1, seed);
+    //try model.add_MSE(1);
 
-    const a: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(a);
-    //try a.load("1.model");
+    //const a: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(a);
+    //try a.load("0");
 
-    const b: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(b);
+    //const b: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(b);
 
-    const c: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(c);
+    //const c: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(c);
 
-    const d: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(d);
+    //const d: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(d);
 
-    const e: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(e);
+    //const e: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(e);
 
-    const f: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(f);
+    //const f: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(f);
 
-    const g: *nn.Network(T) = try gpa.create(nn.Network(T));
-    try model.copy(g);
+    //const g: *nn.Network(T) = try gpa.create(nn.Network(T));
+    //try model.copy(g);
 
-    var networks: [5]train.train_network = undefined;
-    networks[0] = train.train_network.init(a);
-    networks[1] = train.train_network.init(b);
+    //var networks: [3]train.train_network = undefined;
+    //networks[0] = train.train_network.init(a);
+    //networks[1] = train.train_network.init(b);
     //networks[2] = train.train_network.init(c);
     //networks[3] = train.train_network.init(d);
     //networks[4] = train.train_network.init(e);
     //networks[5] = train.train_network.init(d);
     //networks[6] = train.train_network.init(e);
 
+    var eval: [1]static.static_analysis = undefined;
+    eval[0] = static.static_analysis.init();
+
+    try train.train_static(&eval, 6, 10, 10);
     //try v_play_hvh();
     //_ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0);
-    try train.train(gpa, &networks, 3000, 12, 0.01, 0.01, 10000);
+    //try train.train(gpa, &networks, 4096, 12, 0.01, 0.01, 10000);
     //train.compete_eve_single_eval(a, b, 100, 0.01);
     //std.debug.print("{}\n", .{try v_play_eve_single_eval(a, b, 0.01)});
     //for (0..100) |_| {
