@@ -6,13 +6,14 @@ pub const static_analysis = struct {
     gradient: [768]f32,
     gradient_values: u32,
     gradient_mutex: std.Thread.Mutex = .{},
-    // piece_values_for_testing
+    piece_values: [5]f32,
 
     pub fn init() static_analysis {
         const piece_square_tables = std.mem.zeroes([768]f32);
         const gradient = std.mem.zeroes([768]f32);
+        const piece_values = .{ 9, 5, 3.5, 3, 1 };
 
-        return static_analysis{ .piece_square_tables = piece_square_tables, .gradient = gradient, .gradient_values = 0 };
+        return static_analysis{ .piece_square_tables = piece_square_tables, .gradient = gradient, .gradient_values = 0, .piece_values = piece_values };
     }
 
     pub fn step(self: *static_analysis) void {
@@ -57,6 +58,23 @@ pub const static_analysis = struct {
         for (0..self.piece_square_tables.len) |i| {
             self.piece_square_tables[i] += (rand.float(f32) - 1) * 2 * strength;
         }
+    }
+
+    pub fn eval_pv(self: *static_analysis, board: [64]i32) f32 {
+        var val: f32 = 0;
+        for (0..self.piece_values.len) |i| {
+            for (0..64) |j| {
+                if (board[j] == i + 2) {
+                    val += self.piece_values[i];
+                }
+
+                if (board[j] == i + 8) {
+                    val -= self.piece_values[i];
+                }
+            }
+        }
+
+        return val;
     }
 
     pub fn eval(self: *static_analysis, board: [768]f32) f32 {

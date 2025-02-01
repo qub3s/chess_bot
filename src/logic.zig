@@ -12,6 +12,8 @@ pub const Board_s = struct {
     pieces: [64]i32,
     white_to_move: bool,
     draw_counter: u32,
+    white_castled: bool,
+    black_castled: bool,
 
     pub fn possible_moves(board: *Board_s, list: *std.ArrayList(move)) !void {
         return board.get_move(list, true);
@@ -469,9 +471,25 @@ pub const Board_s = struct {
         return Board_s{ .white_castled = self.white_castled, .black_castled = self.black_castled, .pieces = copy_pieces, .white_to_move = self.white_to_move, .draw_counter = self.draw_counter };
     }
 
-    fn get_board_768(p64: [64]i32, p768: *[768]f32) void {
+    pub fn get_board_768(board: Board_s, p768: *[768]f32) void {
+        var result = std.mem.zeroes([64]i32);
+
+        for (0..8) |x| {
+            for (0..8) |y| {
+                const val = board.pieces[x + y * 8];
+
+                if (val == 0) {
+                    result[x + (7 - y) * 8] = 0;
+                } else if (val > 6) {
+                    result[x + (7 - y) * 8] = val - 6;
+                } else if (val <= 6) {
+                    result[x + (7 - y) * 8] = val + 6;
+                }
+            }
+        }
+
         for (0..768) |i| {
-            if (p64[i % 64] == 1 + i / 64) {
+            if (result[i % 64] == 1 + i / 64) {
                 p768[i] = 1;
             } else {
                 p768[i] = 0;
@@ -538,8 +556,7 @@ pub const Board_s = struct {
         }
     }
 
-    // build rest of the functionality
-    pub fn check_win(board: Board_s) i32 {
+    fn check_win(board: Board_s) i32 {
         var res: i32 = 0;
         for (0..64) |i| {
             if (board.pieces[i] == 1) {
@@ -551,7 +568,7 @@ pub const Board_s = struct {
         return res;
     }
 
-    pub fn check_repetition(board: Board_s) bool {
+    fn check_repetition(board: Board_s) bool {
         if (board.draw_counter >= 50) {
             return true;
         } else {
@@ -559,7 +576,23 @@ pub const Board_s = struct {
         }
     }
 
-    pub fn get_winner(board: Board_s) i32 {
+    pub fn is_over(self: *Board_s, moves: std.ArrayList(move)) bool {
+        if (moves.items.len == 0) {
+            return true;
+        }
+
+        if (self.check_repetition()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    pub fn get_result(board: *Board_s) !i32 {
+        if (!try board.check_mate()) {
+            return 0;
+        }
+
         if (board.white_to_move) {
             return -1;
         } else {
@@ -568,7 +601,7 @@ pub const Board_s = struct {
     }
 
     // prior condition that there are zero possible moves
-    pub fn check_mate(board: *Board_s) !bool {
+    fn check_mate(board: *Board_s) !bool {
         var cpy = board.copy();
         cpy.white_to_move = cpy.white_to_move == false;
         return checkmate_next_move(&cpy, true);

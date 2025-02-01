@@ -85,6 +85,7 @@ fn v_play_hvh() !void {
     const screenWidth = 1000;
     const screenHeight = 1000;
     const tile_size = 125;
+    var s = static.static_analysis.init();
 
     var board = logic.Board_s.init();
 
@@ -92,7 +93,6 @@ fn v_play_hvh() !void {
     defer vis.ray.CloseWindow();
     try vis.load_piece_textures();
     vis.ray.SetTargetFPS(30);
-    var result: i32 = 0;
 
     while (!vis.ray.WindowShouldClose()) {
         vis.ray.BeginDrawing();
@@ -103,24 +103,20 @@ fn v_play_hvh() !void {
         defer pos_moves.deinit();
         try board.possible_moves(&pos_moves);
 
-        if (board.check_repetition() or (pos_moves.items.len == 0 and try board.check_mate())) {
-            if (pos_moves.items.len == 0 and try board.check_mate()) {
-                result = board.get_winner();
-            } else {
-                result = 0;
-            }
+        //print("{}\n", .{board.white_to_move});
+        print("anal: {}\n", .{try train.minimax_static_pv(&board, &s, 3)});
+        //print("{}\n", .{board.is_over(pos_moves)});
+        if (board.is_over(pos_moves)) {
+            print("{}\n", .{try board.get_result()});
         }
-
-        std.debug.print("{}\n", .{result});
     }
 }
 
-fn v_play_eve_minimax(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32), randomness: f32) !i32 {
+fn v_play_eve_static_pv() !void {
     var num_move: i32 = 0;
     var board = logic.Board_s.init();
 
-    var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
-    var rand = rnd.random();
+    var s = static.static_analysis.init();
 
     const screenWidth = 1000;
     const screenHeight = 1000;
@@ -128,11 +124,10 @@ fn v_play_eve_minimax(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32), ra
     vis.ray.InitWindow(screenWidth, screenHeight, "");
     defer vis.ray.CloseWindow();
     try vis.load_piece_textures();
-    vis.ray.SetTargetFPS(2);
-
-    var result: i32 = undefined;
+    vis.ray.SetTargetFPS(1);
 
     while (true) {
+        print("-----------------------------------------------------------------\n", .{});
         vis.ray.BeginDrawing();
         defer vis.ray.EndDrawing();
         try vis.visualize(&board, 125);
@@ -141,55 +136,23 @@ fn v_play_eve_minimax(engine_w: *nn.Network(f32), engine_b: *nn.Network(f32), ra
         defer pos_moves.deinit();
         try board.possible_moves(&pos_moves);
 
-        if (board.check_repetition() or (pos_moves.items.len == 0)) {
-            if (pos_moves.items.len == 0 and try board.check_mate()) {
-                result = board.get_winner();
-            } else {
-                result = 0;
-            }
-
+        if (board.is_over(pos_moves)) {
+            print("{}\n", .{try board.get_result()});
             break;
         }
 
-        var min: usize = 0;
-        var min_value: f32 = std.math.inf(f32);
+        const val = -1 * try train.minimax_static_pv(&board, pos_moves, &s, 3);
 
-        for (0..pos_moves.items.len) |i| {
-            var val: f32 = undefined;
-
-            var move_to_eval = board.copy();
-            move_to_eval.make_move_m(pos_moves.items[i]);
-
-            if (move_to_eval.check_win() != 0) {
-                val = -std.math.inf(f32);
-            } else {
-                const rnd_num = rand.float(f32) * randomness;
-                if (@mod(num_move, 2) == 0) {
-                    val = try train.minimax(&move_to_eval, engine_w, 1);
-                    val += rnd_num;
-                } else {
-                    val = try train.minimax(&move_to_eval, engine_b, 1);
-                    val += rnd_num;
-                }
-            }
-
-            if (val < min_value) {
-                min_value = val;
-                min = i;
-            }
-        }
-
-        print("{}\n", .{min_value});
-        board.make_move_m(pos_moves.items[min]);
+        board.make_move_m(pos_moves.items[val.moves]);
         num_move += 1;
     }
-    return result;
 }
 
 pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
     //try v_play_hvh();
+    try v_play_eve_static_pv();
 
     //const T: type = f32;
     //const seed = 33;
@@ -232,10 +195,10 @@ pub fn main() !void {
     //networks[5] = train.train_network.init(d);
     //networks[6] = train.train_network.init(e);
 
-    var eval: [1]static.static_analysis = undefined;
-    eval[0] = static.static_analysis.init();
+    //var eval: [1]static.static_analysis = undefined;
+    //eval[0] = static.static_analysis.init();
 
-    try train.train_static(&eval, 6, 10, 10);
+    //try train.train_static(&eval, 6, 10, 10);
     //try v_play_hvh();
     //_ = try v_play_eve_minimax(networks[0].network, networks[1].network, 0);
     //try train.train(gpa, &networks, 4096, 12, 0.01, 0.01, 10000);

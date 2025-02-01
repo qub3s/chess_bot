@@ -310,13 +310,13 @@ pub fn compete_eve_single_eval(network_A: *nn.Network(f32), network_B: *nn.Netwo
                 if (move_to_eval.check_win() != 0) {
                     val = -std.math.inf(f32);
                 } else {
-                    const rnd_num = rand.float(f32) * randomness;
+                    _ = rand.float(f32) * randomness;
                     if (@mod(num_move, 2) == 0) {
-                        const ev = minimax(&move_to_eval, network_w, 1) catch return;
-                        val = rnd_num + ev;
+                        //const ev = minimax(&move_to_eval, network_w, 1) catch return;
+                        //val = rnd_num + ev;
                     } else {
-                        const ev = minimax(&move_to_eval, network_b, 1) catch return;
-                        val = rnd_num + ev;
+                        //const ev = minimax(&move_to_eval, network_b, 1) catch return;
+                        //val = rnd_num + ev;
                     }
                 }
 
@@ -339,56 +339,6 @@ pub fn compete_eve_single_eval(network_A: *nn.Network(f32), network_B: *nn.Netwo
     }
 }
 
-pub fn minimax(board: *logic.Board_s, model: *nn.Network(f32), level: u32) !f32 {
-    if (level == 0) {
-        return eval_board(board, model);
-    }
-
-    var pos_moves = std.ArrayList(logic.move).init(gpa);
-    defer pos_moves.deinit();
-    try board.possible_moves(&pos_moves);
-
-    // check for checkmate
-    const mate = try board.check_mate();
-
-    if (board.check_repetition() or pos_moves.items.len == 0) {
-        if (pos_moves.items.len == 0 and mate) {
-            return std.math.inf(f32) * @as(f32, @floatFromInt(board.get_winner()));
-        } else {
-            return 0;
-        }
-    }
-
-    if (level % 2 == 0) {
-        var value: f32 = -std.math.inf(f32);
-        // maximize
-        for (0..pos_moves.items.len) |i| {
-            var cpy = board.copy();
-            cpy.make_move_m(pos_moves.items[i]);
-            const res = try minimax(&cpy, model, level - 1);
-
-            if (res > value) {
-                value = res;
-            }
-        }
-        return value;
-    } else {
-        // minimize
-        var value: f32 = std.math.inf(f32);
-
-        for (0..pos_moves.items.len) |i| {
-            var cpy = board.copy();
-            cpy.make_move_m(pos_moves.items[i]);
-            const res = try minimax(&cpy, model, level - 1);
-
-            if (res < value) {
-                value = res;
-            }
-        }
-        return value;
-    }
-}
-
 pub fn eval_board(board: *logic.Board_s, model: *nn.Network(f32)) !f32 {
     var input = mem.zeroes([768]f32);
     var sol = mem.zeroes([1]f32);
@@ -408,12 +358,12 @@ pub fn eval_board(board: *logic.Board_s, model: *nn.Network(f32)) !f32 {
 
 // handles the inversion
 pub fn static_eval(board: *logic.Board_s, model: static.static_analysis) f32 {
-    var res = std.mem.zeroes([64]f32);
+    var res = std.mem.zeroes([64]i32);
 
     if (!board.white_to_move) {
         board.inverse_board(&res);
     } else {
-        @memcpy(res, board.pieces);
+        @memcpy(&res, &board.pieces);
     }
 
     var large = std.mem.zeroes([768]f32);
@@ -422,7 +372,6 @@ pub fn static_eval(board: *logic.Board_s, model: static.static_analysis) f32 {
     return model.eval(large);
 }
 
-// doesnt work nega max
 pub fn static_alpha_beta_max(board: *logic.Board_s, model: static.static_analysis, depth: u32, alpha: f32, beta: f32) f32 {
     if (depth == 0) {
         return static_eval(board, model);
@@ -506,39 +455,6 @@ pub fn static_alpha_beta_min(board: *logic.Board_s, model: static.static_analysi
     return min;
 }
 
-pub fn negaMax(board: *logic.Board_s, model: static.static_analysis, depth: u32){
-    if (depth == 0) {
-        return static_eval(board, model);
-    }
-
-    var max = -std.math.inf(f32);
-
-    var pos_moves = std.ArrayList(logic.move).initCapacity(gpa, 64) catch return min;
-    defer pos_moves.deinit();
-    board.possible_moves(&pos_moves) catch return min;
-
-    const mate = board.check_mate() catch return min;
-    if (board.check_repetition() or pos_moves.items.len == 0) {
-        if (pos_moves.items.len == 0 and mate) {
-                return -std.math.inf(f32); 
-        }
-        return 0;
-    }
-
-    for(0..pos_moves.items.len) |i| {
-        var move_to_eval = board.copy();
-        move_to_eval.make_move_m(pos_moves.items[i]);
-
-        var val = -negaMax(move_to_eval, model, depth-1);
-
-        if( val > max ){
-            max = val;
-        }
-    }
-
-    return max;
-}
-
 pub fn play_static(model_a: static.static_analysis, model_b: static.static_analysis, save_a: *static.static_analysis, save_b: *static.static_analysis) void {
     var num_move: i32 = 0;
     var board = logic.Board_s.init();
@@ -574,9 +490,9 @@ pub fn play_static(model_a: static.static_analysis, model_b: static.static_analy
                 val = -std.math.inf(f32);
             } else {
                 if (@mod(num_move, 2) == 0) {
-                    val = negaMax(move_to_eval, model_a, 3);
+                    //val = negaMax(move_to_eval, model_a, 3);
                 } else {
-                    val = negaMax(move_to_eval, model_b, 3); 
+                    //val = negaMax(move_to_eval, model_b, 3);
                 }
             }
 
@@ -621,4 +537,47 @@ pub fn train_static(eval: []static.static_analysis, threads: u32, epochs: u32, r
             eval[i].step();
         }
     }
+}
+
+pub fn minimax_static_pv(board: *logic.Board_s, moves: std.ArrayList(logic.move), model: *static.static_analysis, level: u32) !struct { move: u32, value: f32 } {
+    if (level == 0) {
+        return .{ .value = static_eval_pv(board, model), .move = 0 };
+    }
+    var max = -std.math.inf(f32);
+    var indx = 0;
+
+    for (0..moves.items.len) |i| {
+        var val = undefined;
+        var move_to_eval = board.copy();
+        move_to_eval.make_move_m(moves.items[i]);
+
+        if (level != 1) {
+            var pos_moves = std.ArrayList(logic.move).init(gpa);
+            defer pos_moves.deinit();
+            try board.possible_moves(&pos_moves);
+
+            val = -1 * try minimax_static_pv(&move_to_eval, pos_moves, model, level - 1);
+        } else {
+            val = -1 * try minimax_static_pv(&move_to_eval, null, model, level - 1);
+        }
+
+        if (val.value > max) {
+            max = val;
+            indx = i.value;
+        }
+    }
+
+    return max;
+}
+
+pub fn static_eval_pv(board: *logic.Board_s, model: *static.static_analysis) f32 {
+    var res = std.mem.zeroes([64]i32);
+
+    if (!board.white_to_move) {
+        board.inverse_board(&res);
+    } else {
+        @memcpy(&res, &board.pieces);
+    }
+
+    return model.eval_pv(res);
 }
