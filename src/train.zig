@@ -539,44 +539,45 @@ pub fn train_static(eval: []static.static_analysis, threads: u32, epochs: u32, r
     }
 }
 
-pub fn minimax_static_pv(board: *logic.Board_s, moves: std.ArrayList(logic.move), model: *static.static_analysis, level: u32) !struct { move: u32, value: f32 } {
+pub fn minimax_static_pv(board: *logic.Board_s, model: *static.static_analysis, level: u32) !struct { move: u32, value: f32 } {
     if (level == 0) {
         return .{ .value = static_eval_pv(board, model), .move = 0 };
     }
+
     var max = -std.math.inf(f32);
-    var indx = 0;
+    var indx: i32 = 0;
+
+    var moves = std.ArrayList(logic.move).init(gpa);
+    defer moves.deinit();
+    try board.possible_moves(&moves);
 
     for (0..moves.items.len) |i| {
-        var val = undefined;
+        var val: f32 = 0;
         var move_to_eval = board.copy();
         move_to_eval.make_move_m(moves.items[i]);
 
-        if (level != 1) {
-            var pos_moves = std.ArrayList(logic.move).init(gpa);
-            defer pos_moves.deinit();
-            try board.possible_moves(&pos_moves);
+        var pos_moves = std.ArrayList(logic.move).init(gpa);
+        defer pos_moves.deinit();
+        try board.possible_moves(&pos_moves);
 
-            val = -1 * try minimax_static_pv(&move_to_eval, pos_moves, model, level - 1);
-        } else {
-            val = -1 * try minimax_static_pv(&move_to_eval, null, model, level - 1);
-        }
+        val = -1 * (try minimax_static_pv(&move_to_eval, model, level - 1)).value;
 
-        if (val.value > max) {
+        if (val > max) {
             max = val;
-            indx = i.value;
+            indx = @intCast(i);
         }
     }
 
-    return max;
+    return .{ .move = @intCast(indx), .value = max };
 }
 
 pub fn static_eval_pv(board: *logic.Board_s, model: *static.static_analysis) f32 {
     var res = std.mem.zeroes([64]i32);
 
-    if (!board.white_to_move) {
-        board.inverse_board(&res);
-    } else {
+    if (board.white_to_move) {
         @memcpy(&res, &board.pieces);
+    } else {
+        board.inverse_board(&res);
     }
 
     return model.eval_pv(res);

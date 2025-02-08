@@ -81,78 +81,86 @@ fn two_mm_play_move_single_eval(engine: *nn.Network(f32), board: *logic.Board_s)
     return board.*;
 }
 
-fn v_play_hvh() !void {
+fn vis_board(board: *logic.Board_s) void {
     const screenWidth = 1000;
     const screenHeight = 1000;
     const tile_size = 125;
-    var s = static.static_analysis.init();
-
-    var board = logic.Board_s.init();
 
     vis.ray.InitWindow(screenWidth, screenHeight, "");
     defer vis.ray.CloseWindow();
-    try vis.load_piece_textures();
+    vis.load_piece_textures() catch return;
     vis.ray.SetTargetFPS(30);
 
     while (!vis.ray.WindowShouldClose()) {
         vis.ray.BeginDrawing();
         defer vis.ray.EndDrawing();
-        try vis.visualize(&board, tile_size);
-
-        var pos_moves = std.ArrayList(logic.move).init(gpa);
-        defer pos_moves.deinit();
-        try board.possible_moves(&pos_moves);
-
-        //print("{}\n", .{board.white_to_move});
-        print("anal: {}\n", .{try train.minimax_static_pv(&board, &s, 3)});
-        //print("{}\n", .{board.is_over(pos_moves)});
-        if (board.is_over(pos_moves)) {
-            print("{}\n", .{try board.get_result()});
-        }
+        vis.visualize(board, tile_size) catch return;
     }
 }
 
-fn v_play_eve_static_pv() !void {
-    var num_move: i32 = 0;
-    var board = logic.Board_s.init();
-
+fn v_play_hvh() !void {
     var s = static.static_analysis.init();
 
-    const screenWidth = 1000;
-    const screenHeight = 1000;
+    var board = logic.Board_s.init();
 
-    vis.ray.InitWindow(screenWidth, screenHeight, "");
-    defer vis.ray.CloseWindow();
-    try vis.load_piece_textures();
-    vis.ray.SetTargetFPS(1);
+    var pos_moves = std.ArrayList(logic.move).init(gpa);
+    defer pos_moves.deinit();
+    try board.possible_moves(&pos_moves);
 
-    while (true) {
-        print("-----------------------------------------------------------------\n", .{});
-        vis.ray.BeginDrawing();
-        defer vis.ray.EndDrawing();
-        try vis.visualize(&board, 125);
+    const thread = try std.Thread.spawn(.{}, vis_board, .{&board});
 
-        var pos_moves = std.ArrayList(logic.move).init(gpa);
-        defer pos_moves.deinit();
-        try board.possible_moves(&pos_moves);
+    while (!vis.ray.WindowShouldClose()) {
+        print("{}\n", .{(try train.minimax_static_pv(&board, &s, 2)).value});
+    }
 
-        if (board.is_over(pos_moves)) {
-            print("{}\n", .{try board.get_result()});
-            break;
-        }
+    thread.join();
 
-        const val = -1 * try train.minimax_static_pv(&board, pos_moves, &s, 3);
-
-        board.make_move_m(pos_moves.items[val.moves]);
-        num_move += 1;
+    if (board.is_over(pos_moves)) {
+        print("{}\n", .{try board.get_result()});
     }
 }
+
+//fn v_play_eve_static_pv() !void {
+//    var num_move: i32 = 0;
+//    var board = logic.Board_s.init();
+//
+//    var s = static.static_analysis.init();
+//
+//    const screenWidth = 1000;
+//    const screenHeight = 1000;
+//
+//    vis.ray.InitWindow(screenWidth, screenHeight, "");
+//    defer vis.ray.CloseWindow();
+//    try vis.load_piece_textures();
+//    vis.ray.SetTargetFPS(1);
+//
+//    while (true) {
+//        print("-----------------------------------------------------------------\n", .{});
+//        vis.ray.BeginDrawing();
+//        defer vis.ray.EndDrawing();
+//        try vis.visualize(&board, 125);
+//
+//        var pos_moves = std.ArrayList(logic.move).init(gpa);
+//        defer pos_moves.deinit();
+//        try board.possible_moves(&pos_moves);
+//
+//        if (board.is_over(pos_moves)) {
+//            print("{}\n", .{try board.get_result()});
+//            break;
+//        }
+//
+//        //const val = -1 * try train.minimax_static_pv(&board, pos_moves, &s, 3);
+//
+//        board.make_move_m(pos_moves.items[val.moves]);
+//        num_move += 1;
+//    }
+//}
 
 pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
-    //try v_play_hvh();
-    try v_play_eve_static_pv();
+    try v_play_hvh();
+    //try v_play_eve_static_pv();
 
     //const T: type = f32;
     //const seed = 33;
