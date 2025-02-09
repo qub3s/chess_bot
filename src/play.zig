@@ -90,7 +90,7 @@ pub fn play_best_move_pv(board: *logic.Board_s, model: *static.static_analysis, 
     }
 
     board.make_move_m(moves.items[@intCast(indx)]);
-    std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
+    //std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
     analyzed_positions = 0;
     return max;
 }

@@ -8,6 +8,7 @@ const tpool = @import("src/thread_pool.zig");
 const train = @import("src/train.zig");
 const static = @import("src/static_eval.zig");
 const play = @import("src/play.zig");
+const bench = @import("src/benchmark.zig");
 
 pub const ray = @cImport({
     @cInclude("raylib.h");
@@ -83,8 +84,9 @@ fn v_play_eve() !void {
 pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
+    try bench.benchmark_move_gen();
     //try v_play_hvh();
-    try v_play_eve();
+    //try v_play_eve();
 
     //try v_play_eve_static_pv();
 
