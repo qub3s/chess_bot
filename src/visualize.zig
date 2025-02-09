@@ -16,7 +16,7 @@ var textures_pieces: [12]ray.Texture = undefined;
 const black_color: u32 = 0xf0d9b5ff;
 const white_color: u32 = 0xb58863ff;
 
-var vis_thread: std.Thread.Mutex = std.Thread.Mutex.lock();
+pub var vis_thread: bool = false;
 
 pub fn load_piece_textures() !void {
     const names: [12][]const u8 = .{ "images/pieces/kl.png", "images/pieces/ql.png", "images/pieces/rl.png", "images/pieces/bl.png", "images/pieces/nl.png", "images/pieces/pl.png", "images/pieces/kd.png", "images/pieces/qd.png", "images/pieces/rd.png", "images/pieces/bd.png", "images/pieces/nd.png", "images/pieces/pd.png" };
@@ -130,8 +130,6 @@ pub fn visualize(board: *logic.Board_s, size: i32) !void {
 }
 
 fn vis_board(board: *logic.Board_s) void {
-    vis_thread.unlock();
-
     const screenWidth = 1000;
     const screenHeight = 1000;
     const tile_size = 125;
@@ -141,11 +139,13 @@ fn vis_board(board: *logic.Board_s) void {
     load_piece_textures() catch return;
     ray.SetTargetFPS(30);
 
+    vis_thread = true;
+
     while (!ray.WindowShouldClose()) {
         ray.BeginDrawing();
         defer ray.EndDrawing();
         visualize(board, tile_size) catch return;
     }
 
-    _ = vis_thread.tryLock();
+    vis_thread = false;
 }

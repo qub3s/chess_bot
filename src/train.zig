@@ -9,6 +9,7 @@ const mem = std.mem;
 
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = general_purpose_allocator.allocator();
+
 const board_evaluation = struct { board: logic.Board_s, value: f32 };
 
 pub const train_network = struct {
@@ -537,48 +538,4 @@ pub fn train_static(eval: []static.static_analysis, threads: u32, epochs: u32, r
             eval[i].step();
         }
     }
-}
-
-pub fn minimax_static_pv(board: *logic.Board_s, model: *static.static_analysis, level: u32) !struct { move: u32, value: f32 } {
-    if (level == 0) {
-        return .{ .value = static_eval_pv(board, model), .move = 0 };
-    }
-
-    var max = -std.math.inf(f32);
-    var indx: i32 = 0;
-
-    var moves = std.ArrayList(logic.move).init(gpa);
-    defer moves.deinit();
-    try board.possible_moves(&moves);
-
-    for (0..moves.items.len) |i| {
-        var val: f32 = 0;
-        var move_to_eval = board.copy();
-        move_to_eval.make_move_m(moves.items[i]);
-
-        var pos_moves = std.ArrayList(logic.move).init(gpa);
-        defer pos_moves.deinit();
-        try board.possible_moves(&pos_moves);
-
-        val = -1 * (try minimax_static_pv(&move_to_eval, model, level - 1)).value;
-
-        if (val > max) {
-            max = val;
-            indx = @intCast(i);
-        }
-    }
-
-    return .{ .move = @intCast(indx), .value = max };
-}
-
-pub fn static_eval_pv(board: *logic.Board_s, model: *static.static_analysis) f32 {
-    var res = std.mem.zeroes([64]i32);
-
-    if (board.white_to_move) {
-        @memcpy(&res, &board.pieces);
-    } else {
-        board.inverse_board(&res);
-    }
-
-    return model.eval_pv(res);
 }

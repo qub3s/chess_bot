@@ -7,6 +7,7 @@ const vis = @import("src/visualize.zig");
 const tpool = @import("src/thread_pool.zig");
 const train = @import("src/train.zig");
 const static = @import("src/static_eval.zig");
+const play = @import("src/play.zig");
 
 pub const ray = @cImport({
     @cInclude("raylib.h");
@@ -22,64 +23,6 @@ const print = std.debug.print;
 const Error = error{
     ErrorLogic,
 };
-
-fn two_mm_calc_min_move(engine: *nn.Network(f32), board: *logic.Board_s) !f32 {
-    var pos_moves = std.ArrayList(logic.move).init(gpa);
-    defer pos_moves.deinit();
-    try board.possible_moves(&pos_moves);
-
-    var min: usize = 0;
-    var min_value: f32 = std.math.inf(f32);
-
-    for (0..pos_moves.items.len) |i| {
-        var val: f32 = undefined;
-        var move_to_eval = board.copy();
-        move_to_eval.make_move_m(pos_moves.items[i]);
-
-        if (move_to_eval.check_win() != 0) {
-            val = -std.math.inf(f32);
-        } else {
-            val = try train.eval_board(move_to_eval, engine);
-        }
-
-        if (val < min_value) {
-            min_value = val;
-            min = i;
-        }
-    }
-
-    return min_value;
-}
-
-fn two_mm_play_move_single_eval(engine: *nn.Network(f32), board: *logic.Board_s) !logic.Board_s {
-    var pos_moves = try std.ArrayList(logic.move).initCapacity(gpa, 100);
-    defer pos_moves.deinit();
-    try board.possible_moves(&pos_moves);
-
-    var max: usize = 0;
-    var max_value: f32 = -std.math.inf(f32);
-
-    for (0..pos_moves.items.len) |i| {
-        var val: f32 = undefined;
-        var move_to_eval = board.copy();
-        move_to_eval.make_move_m(pos_moves.items[i]);
-
-        if (move_to_eval.check_win() != 0) {
-            val = std.math.inf(f32);
-        } else {
-            val = try two_mm_calc_min_move(engine, &move_to_eval);
-        }
-
-        if (val > max_value) {
-            max_value = val;
-            max = i;
-        }
-    }
-
-    board.make_move_m(pos_moves.items[max]);
-
-    return board.*;
-}
 
 fn vis_board(board: *logic.Board_s) void {
     const screenWidth = 1000;
@@ -103,63 +46,46 @@ fn v_play_hvh() !void {
 
     var board = logic.Board_s.init();
 
-    var pos_moves = std.ArrayList(logic.move).init(gpa);
-    defer pos_moves.deinit();
-    try board.possible_moves(&pos_moves);
-
     const thread = try std.Thread.spawn(.{}, vis_board, .{&board});
 
-    while (!vis.ray.WindowShouldClose()) {
-        print("{}\n", .{(try train.minimax_static_pv(&board, &s, 2)).value});
+    print("{}\n", .{vis.vis_thread});
+    while (!vis.vis_thread) {
+        const res = (try play.eval_position_move_pv(&board, &s, 1));
+
+        print("{}\n", .{res});
     }
 
     thread.join();
-
-    if (board.is_over(pos_moves)) {
-        print("{}\n", .{try board.get_result()});
-    }
+    print("{}\n", .{try board.get_result()});
 }
 
-//fn v_play_eve_static_pv() !void {
-//    var num_move: i32 = 0;
-//    var board = logic.Board_s.init();
-//
-//    var s = static.static_analysis.init();
-//
-//    const screenWidth = 1000;
-//    const screenHeight = 1000;
-//
-//    vis.ray.InitWindow(screenWidth, screenHeight, "");
-//    defer vis.ray.CloseWindow();
-//    try vis.load_piece_textures();
-//    vis.ray.SetTargetFPS(1);
-//
-//    while (true) {
-//        print("-----------------------------------------------------------------\n", .{});
-//        vis.ray.BeginDrawing();
-//        defer vis.ray.EndDrawing();
-//        try vis.visualize(&board, 125);
-//
-//        var pos_moves = std.ArrayList(logic.move).init(gpa);
-//        defer pos_moves.deinit();
-//        try board.possible_moves(&pos_moves);
-//
-//        if (board.is_over(pos_moves)) {
-//            print("{}\n", .{try board.get_result()});
-//            break;
-//        }
-//
-//        //const val = -1 * try train.minimax_static_pv(&board, pos_moves, &s, 3);
-//
-//        board.make_move_m(pos_moves.items[val.moves]);
-//        num_move += 1;
-//    }
-//}
+fn v_play_hve() !void {}
+
+fn v_play_eve() !void {
+    play.add_rand = true;
+    var s = static.static_analysis.init();
+
+    var board = logic.Board_s.init();
+
+    const thread = try std.Thread.spawn(.{}, vis_board, .{&board});
+
+    print("{}\n", .{vis.vis_thread});
+    while (!vis.vis_thread) {
+        print("{}\n", .{board.white_to_move});
+        const res = (try play.play_best_move_pv(&board, &s, 4));
+        print("{d}\n", .{res});
+    }
+
+    thread.join();
+    print("{}\n", .{try board.get_result()});
+}
 
 pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
-    try v_play_hvh();
+    //try v_play_hvh();
+    try v_play_eve();
+
     //try v_play_eve_static_pv();
 
     //const T: type = f32;
