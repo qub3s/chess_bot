@@ -60,8 +60,6 @@ fn v_play_hvh() !void {
     print("{}\n", .{try board.get_result()});
 }
 
-fn v_play_hve() !void {}
-
 fn v_play_eve() !void {
     play.add_rand = true;
     var s = static.static_analysis.init();
@@ -90,13 +88,16 @@ pub fn main() !void {
     x.display();
     x.inverse();
 
-    //x.display();
     bb.generate_attackmaps();
+    var moves = std.ArrayList(bb.bitboard).init(gpa);
+    try x.gen_moves(&moves);
 
-    for (0..10) |i| {
-        bb.display_u64(bb.pawn_attacks_white[i]);
-        std.debug.print("\n\n", .{});
-    }
+    //std.debug.print("\n", .{});
+    //for (0..4) |i| {
+    //    std.debug.print("{}\n", .{i});
+    //    moves.items[i].display();
+    //    std.debug.print("\n\n", .{});
+    //}
 
     //try v_play_hvh();
     //try v_play_eve();
