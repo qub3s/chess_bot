@@ -84,12 +84,19 @@ fn v_play_eve() !void {
 pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
-    try bench.benchmark_move_gen();
+    //try bench.benchmark_move_gen();
 
     var x = bb.bitboard.init();
     x.display();
     x.inverse();
-    x.display();
+
+    //x.display();
+    bb.generate_attackmaps();
+
+    for (0..10) |i| {
+        bb.display_u64(bb.pawn_attacks_white[i]);
+        std.debug.print("\n\n", .{});
+    }
 
     //try v_play_hvh();
     //try v_play_eve();
