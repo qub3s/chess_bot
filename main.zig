@@ -92,6 +92,15 @@ pub fn main() !void {
     var moves = std.ArrayList(bb.bitboard).init(gpa);
     try x.gen_moves(&moves);
 
+    std.debug.print("\n\n", .{});
+    const t: u64 = 0xf00f000000ff00ff;
+    bb.display_u64(t);
+    std.debug.print("\n\n", .{});
+    bb.display_u64(bb.inverse_vertical_u64_bits(t));
+    std.debug.print("\n\n", .{});
+    //bb.display_u64(0xff);
+    //std.debug.print("\n\n", .{});
+
     //std.debug.print("\n", .{});
     //for (0..4) |i| {
     //    std.debug.print("{}\n", .{i});

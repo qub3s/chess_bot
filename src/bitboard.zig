@@ -280,6 +280,8 @@ fn generate_knight_moves() void {
     }
 }
 
+fn generate_rook_masks() void {}
+
 pub fn display_u64(b: u64) void {
     var tmp: u64 = 1;
 
@@ -295,4 +297,12 @@ pub fn display_u64(b: u64) void {
         }
         tmp = tmp << 1;
     }
+}
+
+pub inline fn inverse_horizontal_u64_bits(b: u64) u64 {
+    return b << 56 | (0xff00 & b) << 40 | (0xff0000 & b) << 24 | (0xff000000 & b) << 8 | b >> 56 | (0xff000000000000 & b) >> 40 | (0xff000000000000 & b) >> 24 | (0xff0000000 & b) >> 8;
+}
+
+pub inline fn inverse_vertical_u64_bits(b: u64) u64 {
+    return (0xf0f0f0f0f0f0f0f0 & b) >> 4 | (0x0f0f0f0f0f0f0f & b) << 4;
 }
