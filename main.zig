@@ -89,24 +89,13 @@ pub fn main() !void {
     x.inverse();
 
     bb.generate_attackmaps();
-    var moves = std.ArrayList(bb.bitboard).init(gpa);
-    try x.gen_moves(&moves);
 
-    std.debug.print("\n\n", .{});
-    const t: u64 = 0xf00f000000ff00ff;
-    bb.display_u64(t);
-    std.debug.print("\n\n", .{});
-    bb.display_u64(bb.inverse_vertical_u64_bits(t));
-    std.debug.print("\n\n", .{});
-    //bb.display_u64(0xff);
-    //std.debug.print("\n\n", .{});
-
-    //std.debug.print("\n", .{});
-    //for (0..4) |i| {
-    //    std.debug.print("{}\n", .{i});
-    //    moves.items[i].display();
-    //    std.debug.print("\n\n", .{});
-    //}
+    std.debug.print("\n", .{});
+    for (0..16) |i| {
+        std.debug.print("{}\n", .{i});
+        bb.display_u64(bb.bishop_masks[i]);
+        std.debug.print("\n\n", .{});
+    }
 
     //try v_play_hvh();
     //try v_play_eve();

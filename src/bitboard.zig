@@ -11,6 +11,9 @@ pub var pawn_moves_white: [64]u64 = std.mem.zeroes([64]u64);
 pub var pawn_attacks_black: [64]u64 = std.mem.zeroes([64]u64);
 pub var pawn_moves_black: [64]u64 = std.mem.zeroes([64]u64);
 
+pub var rook_masks: [64]u64 = std.mem.zeroes([64]u64);
+pub var bishop_masks: [64]u64 = std.mem.zeroes([64]u64);
+
 pub const bitboard = struct {
     // black       - white
     // k q r b k p - K Q R B K P
@@ -160,6 +163,9 @@ pub fn generate_attackmaps() void {
     generate_king_moves();
     generate_pawn_attacks();
     generate_pawn_moves();
+
+    generate_rook_masks();
+    generate_bishop_masks();
 }
 
 fn generate_pawn_attacks() void {
@@ -280,7 +286,73 @@ fn generate_knight_moves() void {
     }
 }
 
-fn generate_rook_masks() void {}
+fn generate_rook_masks() void {
+    const one: u64 = 1;
+
+    for (0..64) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        const x_change = [_]i32{ 0, 0, 1, -1 };
+        const y_change = [_]i32{ 1, -1, 0, 0 };
+
+        for (x_change, y_change) |xc, yc| {
+            var x2 = x + xc;
+            var y2 = y + yc;
+
+            while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+                rook_masks[i] |= one << @intCast(x2 + y2 * 8);
+
+                x2 += xc;
+                y2 += yc;
+            }
+        }
+
+        if (x != 0) {
+            rook_masks[i] ^= one << @intCast(y * 8);
+        }
+
+        if (x != 7) {
+            rook_masks[i] ^= one << @intCast(7 + y * 8);
+        }
+
+        if (y != 0) {
+            rook_masks[i] ^= one << @intCast(x);
+        }
+
+        if (y != 7) {
+            rook_masks[i] ^= one << @intCast(x + 7 * 8);
+        }
+    }
+}
+
+fn generate_bishop_masks() void {
+    const one: u64 = 1;
+    // all bordering bits
+    const remove: u64 = 0xff818181818181ff;
+
+    for (0..64) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        const x_change = [_]i32{ -1, -1, 1, 1 };
+        const y_change = [_]i32{ 1, -1, 1, -1 };
+
+        for (x_change, y_change) |xc, yc| {
+            var x2 = x + xc;
+            var y2 = y + yc;
+
+            while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+                bishop_masks[i] |= one << @intCast(x2 + y2 * 8);
+
+                x2 += xc;
+                y2 += yc;
+            }
+        }
+
+        bishop_masks[i] ^= (bishop_masks[i] & remove);
+    }
+}
 
 pub fn display_u64(b: u64) void {
     var tmp: u64 = 1;
