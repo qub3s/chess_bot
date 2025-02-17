@@ -93,7 +93,7 @@ pub fn main() !void {
     std.debug.print("\n", .{});
     for (0..16) |i| {
         std.debug.print("{}\n", .{i});
-        bb.display_u64(bb.bishop_masks[i]);
+        bb.display_u64(bb.rook_masks_h[i]);
         std.debug.print("\n\n", .{});
     }
 

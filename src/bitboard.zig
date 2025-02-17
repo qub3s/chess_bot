@@ -11,8 +11,17 @@ pub var pawn_moves_white: [64]u64 = std.mem.zeroes([64]u64);
 pub var pawn_attacks_black: [64]u64 = std.mem.zeroes([64]u64);
 pub var pawn_moves_black: [64]u64 = std.mem.zeroes([64]u64);
 
-pub var rook_masks: [64]u64 = std.mem.zeroes([64]u64);
-pub var bishop_masks: [64]u64 = std.mem.zeroes([64]u64);
+pub var rook_masks_v: [16]u64 = std.mem.zeroes([16]u64);
+pub var rook_masks_h: [16]u64 = std.mem.zeroes([16]u64);
+
+pub var search_table_rook_v: [16][256]u4 = std.mem.zeroes([16][64]u4);
+pub var search_table_rook_h: [16][256]u4 = std.mem.zeroes([16][64]u4);
+
+pub var attk_map_rook_v: [16][12]u64 = std.mem.zeroes([16][12]u64);
+pub var attk_map_rook_h: [16][12]u64 = std.mem.zeroes([16][12]u64);
+
+//pub var bishop_masks_dl: [16]u64 = std.mem.zeroes([16]u64);
+//pub var bishop_masks_dr: [16]u64 = std.mem.zeroes([16]u64);
 
 pub const bitboard = struct {
     // black       - white
@@ -109,8 +118,6 @@ pub const bitboard = struct {
         }
     }
 
-    inline fn double_push() void {}
-
     pub fn gen_moves(self: *bitboard, store: *std.ArrayList(bitboard)) !void {
         var all_pieces: u64 = 0;
         var own_pieces: u64 = 0;
@@ -165,7 +172,8 @@ pub fn generate_attackmaps() void {
     generate_pawn_moves();
 
     generate_rook_masks();
-    generate_bishop_masks();
+    generate_rook_attacks();
+    //generate_bishop_masks();
 }
 
 fn generate_pawn_attacks() void {
@@ -289,68 +297,67 @@ fn generate_knight_moves() void {
 fn generate_rook_masks() void {
     const one: u64 = 1;
 
-    for (0..64) |i| {
+    for (0..32) |i| {
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
-        const x_change = [_]i32{ 0, 0, 1, -1 };
-        const y_change = [_]i32{ 1, -1, 0, 0 };
+        if (x < 4 and y < 4) {
+            const y_change = [_]i32{ 1, -1 };
 
-        for (x_change, y_change) |xc, yc| {
-            var x2 = x + xc;
-            var y2 = y + yc;
+            for (y_change) |yc| {
+                const x2 = x;
+                var y2 = y + yc;
 
-            while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                rook_masks[i] |= one << @intCast(x2 + y2 * 8);
+                while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+                    rook_masks_v[@intCast(x + y * 4)] |= one << @intCast(x2 + y2 * 8);
 
-                x2 += xc;
-                y2 += yc;
+                    y2 += yc;
+                }
+            }
+
+            if (y != 0) {
+                rook_masks_v[@intCast(x + y * 4)] ^= one << @intCast(x);
+            }
+
+            if (y != 7) {
+                rook_masks_v[@intCast(x + y * 4)] ^= one << @intCast(x + 7 * 8);
             }
         }
+    }
 
-        if (x != 0) {
-            rook_masks[i] ^= one << @intCast(y * 8);
-        }
+    for (0..32) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
-        if (x != 7) {
-            rook_masks[i] ^= one << @intCast(7 + y * 8);
-        }
+        if (x < 4 and y < 4) {
+            const x_change = [_]i32{ 1, -1 };
 
-        if (y != 0) {
-            rook_masks[i] ^= one << @intCast(x);
-        }
+            for (x_change) |xc| {
+                var x2 = x + xc;
+                const y2 = y;
 
-        if (y != 7) {
-            rook_masks[i] ^= one << @intCast(x + 7 * 8);
+                while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+                    rook_masks_h[@intCast(x + y * 4)] |= one << @intCast(x2 + y2 * 8);
+
+                    x2 += xc;
+                }
+            }
+
+            if (x != 0) {
+                rook_masks_h[@intCast(x + y * 4)] ^= one << @intCast(y * 8);
+            }
+
+            if (x != 7) {
+                rook_masks_h[@intCast(x + y * 4)] ^= one << @intCast(7 + y * 8);
+            }
         }
     }
 }
 
-fn generate_bishop_masks() void {
-    const one: u64 = 1;
-    // all bordering bits
-    const remove: u64 = 0xff818181818181ff;
-
-    for (0..64) |i| {
-        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
-        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
-
-        const x_change = [_]i32{ -1, -1, 1, 1 };
-        const y_change = [_]i32{ 1, -1, 1, -1 };
-
-        for (x_change, y_change) |xc, yc| {
-            var x2 = x + xc;
-            var y2 = y + yc;
-
-            while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                bishop_masks[i] |= one << @intCast(x2 + y2 * 8);
-
-                x2 += xc;
-                y2 += yc;
-            }
-        }
-
-        bishop_masks[i] ^= (bishop_masks[i] & remove);
+fn generate_rook_attacks() void {
+    for (0..16) |i| {
+        const current_vmask = rook_masks_v[i];
+        const current_hmask = rook_masks_h[i];
     }
 }
 
@@ -378,3 +385,33 @@ pub inline fn inverse_horizontal_u64_bits(b: u64) u64 {
 pub inline fn inverse_vertical_u64_bits(b: u64) u64 {
     return (0xf0f0f0f0f0f0f0f0 & b) >> 4 | (0x0f0f0f0f0f0f0f & b) << 4;
 }
+
+//fn generate_bishop_masks() void {
+//    const one: u64 = 1;
+//    // all bordering bits
+//    const remove: u64 = 0xff818181818181ff;
+//
+//    for (0..64) |i| {
+//        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+//        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+//
+//        if (x < 4 and y < 4) {
+//            const x_change = [_]i32{ -1, -1, 1, 1 };
+//            const y_change = [_]i32{ 1, -1, 1, -1 };
+//
+//            for (x_change, y_change) |xc, yc| {
+//                var x2 = x + xc;
+//                var y2 = y + yc;
+//
+//                while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+//                    bishop_masks_dl[i] |= one << @intCast(x2 + y2 * 8);
+//
+//                    x2 += xc;
+//                    y2 += yc;
+//                }
+//            }
+//
+//            bishop_masks_dl[i] ^= (bishop_masks_dl[i] & remove);
+//        }
+//    }
+//}
