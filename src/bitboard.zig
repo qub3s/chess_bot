@@ -1,24 +1,33 @@
 const std = @import("std");
 
-var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+var general_purpose_allocator = std.heap.GeneralPurposeAllocautor(.{}){};
 const gpa = general_purpose_allocator.allocator();
 
-pub var knight_moves: [64]u64 = std.mem.zeroes([64]u64);
-pub var king_moves: [64]u64 = std.mem.zeroes([64]u64);
+pub var knight_moves: [64]u64 = undefined;
+pub var king_moves: [64]u64 = undefined;
 
-pub var pawn_attacks_white: [64]u64 = std.mem.zeroes([64]u64);
-pub var pawn_moves_white: [64]u64 = std.mem.zeroes([64]u64);
-pub var pawn_attacks_black: [64]u64 = std.mem.zeroes([64]u64);
-pub var pawn_moves_black: [64]u64 = std.mem.zeroes([64]u64);
+pub var pawn_attacks_white: [64]u64 = undefined;
+pub var pawn_moves_white: [64]u64 = undefined;
 
-pub var rook_masks_v: [16]u64 = std.mem.zeroes([16]u64);
-pub var rook_masks_h: [16]u64 = std.mem.zeroes([16]u64);
+pub var pawn_attacks_black: [64]u64 = undefined;
+pub var pawn_moves_black: [64]u64 = undefined;
 
-pub var search_table_rook_v: [16][256]u4 = std.mem.zeroes([16][64]u4);
-pub var search_table_rook_h: [16][256]u4 = std.mem.zeroes([16][64]u4);
+pub var rook_masks_v: [16]u64 = undefined;
+pub var rook_masks_h: [16]u64 = undefined;
 
-pub var attk_map_rook_v: [16][12]u64 = std.mem.zeroes([16][12]u64);
-pub var attk_map_rook_h: [16][12]u64 = std.mem.zeroes([16][12]u64);
+pub var magic_rook_v: [16]u6 = undefined;
+pub var magic_rook_h: [16]u6 = undefined;
+
+pub var atk_map_rook_v: [16][12]u64 = undefined;
+pub var atk_map_rook_h: [16][12]u64 = undefined;
+
+pub var search_table_rook_v: [16][64]u4 = undefined;
+pub var search_table_rook_h: [16][64]u4 = undefined;
+
+// 1: rook mask * blockers
+// 2: blockers * magic
+// 3: search table lookup
+// 4: attack map lookup
 
 //pub var bishop_masks_dl: [16]u64 = std.mem.zeroes([16]u64);
 //pub var bishop_masks_dr: [16]u64 = std.mem.zeroes([16]u64);
@@ -308,7 +317,7 @@ fn generate_rook_masks() void {
                 const x2 = x;
                 var y2 = y + yc;
 
-                while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+                while (y2 >= 0 and y2 < 8) {
                     rook_masks_v[@intCast(x + y * 4)] |= one << @intCast(x2 + y2 * 8);
 
                     y2 += yc;
@@ -336,7 +345,7 @@ fn generate_rook_masks() void {
                 var x2 = x + xc;
                 const y2 = y;
 
-                while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
+                while (x2 >= 0 and x2 < 8) {
                     rook_masks_h[@intCast(x + y * 4)] |= one << @intCast(x2 + y2 * 8);
 
                     x2 += xc;
@@ -355,9 +364,56 @@ fn generate_rook_masks() void {
 }
 
 fn generate_rook_attacks() void {
-    for (0..16) |i| {
-        const current_vmask = rook_masks_v[i];
-        const current_hmask = rook_masks_h[i];
+    const one: u64 = 1;
+    var atk_map: u64 = undefined;
+
+    for (0..32) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        if (x < 4 and y < 4) {
+            magic_rook_h[@intCast(x + 4 * y)] = @intCast(y * 8 + 1);
+
+            for (0..64) |j| {
+                const board: u64 = j << @intCast(y * 8 + 1);
+                atk_map = 0;
+
+                if (board & one << @intCast(x + y * 8) == 0) {
+                    const x_change = [_]i32{ 1, -1 };
+
+                    for (x_change) |xc| {
+                        var x2 = x + xc;
+
+                        while (x2 >= 0 and x2 < 8 and board & (one << @intCast(x2 + y * 8)) == 0) {
+                            atk_map |= one << @intCast(x2 + y * 8);
+                            x2 += xc;
+                        }
+
+                        if (x2 >= 0 and x2 < 8 and board & (one << @intCast(x2 + y * 8)) != 0) {
+                            atk_map |= one << @intCast(x2 + y * 8);
+                        }
+                    }
+
+                    for (0..20) |k| {
+                        if (atk_map_rook_h[@intCast(x + y * 4)][k] == atk_map) {
+                            search_table_rook_h[@intCast(x + y * 4)][j] = @intCast(k);
+                            break;
+                        }
+
+                        if (atk_map_rook_h[@intCast(x + y * 4)][k] == 0) {
+                            search_table_rook_h[@intCast(x + y * 4)][j] = @intCast(k);
+                            atk_map_rook_h[@intCast(x + y * 4)][k] = atk_map;
+                            break;
+                        }
+                    }
+
+                    //std.debug.print("\n\n\n\n", .{});
+                    //display_u64(board);
+                    //std.debug.print("\n\n", .{});
+                    //display_u64(atk_map);
+                }
+            }
+        }
     }
 }
 
@@ -378,12 +434,28 @@ pub fn display_u64(b: u64) void {
     }
 }
 
-pub inline fn inverse_horizontal_u64_bits(b: u64) u64 {
+pub inline fn inverse_horizontal_u64(b: u64) u64 {
     return b << 56 | (0xff00 & b) << 40 | (0xff0000 & b) << 24 | (0xff000000 & b) << 8 | b >> 56 | (0xff000000000000 & b) >> 40 | (0xff000000000000 & b) >> 24 | (0xff0000000 & b) >> 8;
 }
 
-pub inline fn inverse_vertical_u64_bits(b: u64) u64 {
+pub inline fn inverse_vertical_u64(b: u64) u64 {
     return (0xf0f0f0f0f0f0f0f0 & b) >> 4 | (0x0f0f0f0f0f0f0f & b) << 4;
+}
+
+pub inline fn transpose_u64(b: u64) u64 {
+    const one: u64 = 1;
+    var copy: u64 = 0;
+
+    for (0..64) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        if (one << @intCast(x + y * 8) & b != 0) {
+            copy |= one << @intCast(y + x * 8);
+        }
+    }
+
+    return copy;
 }
 
 //fn generate_bishop_masks() void {

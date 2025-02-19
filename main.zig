@@ -90,12 +90,12 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    std.debug.print("\n", .{});
-    for (0..16) |i| {
-        std.debug.print("{}\n", .{i});
-        bb.display_u64(bb.rook_masks_h[i]);
-        std.debug.print("\n\n", .{});
-    }
+    //std.debug.print("\n", .{});
+    //for (0..16) |i| {
+    //    std.debug.print("{}\n", .{i});
+    //    bb.display_u64(bb.rook_masks_h[i]);
+    //    std.debug.print("\n\n", .{});
+    //}
 
     //try v_play_hvh();
     //try v_play_eve();
