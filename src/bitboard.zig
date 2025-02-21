@@ -15,8 +15,8 @@ pub var pawn_moves_black: [64]u64 = undefined;
 pub var rook_masks_v: [16]u64 = undefined;
 pub var rook_masks_h: [16]u64 = undefined;
 
-pub var magic_rook_v: [16]u6 = undefined;
-pub var magic_rook_h: [16]u6 = undefined;
+pub var magic_rook_v: [16]u64 = undefined;
+pub var magic_rook_h: [16]u64 = undefined;
 
 pub var atk_map_rook_v: [16][12]u64 = undefined;
 pub var atk_map_rook_h: [16][12]u64 = undefined;
@@ -372,10 +372,11 @@ fn generate_rook_attacks() void {
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
         if (x < 4 and y < 4) {
-            magic_rook_h[@intCast(x + 4 * y)] = @intCast(y * 8 + 1);
+            magic_rook_h[@intCast(x + 4 * y)] = std.math.pow(u64, 2, @intCast((7 - y) * 8 + 1));
 
             for (0..64) |j| {
                 const board: u64 = j << @intCast(y * 8 + 1);
+
                 atk_map = 0;
 
                 if (board & one << @intCast(x + y * 8) == 0) {
@@ -412,6 +413,54 @@ fn generate_rook_attacks() void {
                     //std.debug.print("\n\n", .{});
                     //display_u64(atk_map);
                 }
+            }
+        }
+    }
+
+    for (0..32) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        if (x < 4 and y < 4) {
+            for (0..8) |j| {
+                magic_rook_v[@intCast(x + 4 * y)] |= one << @intCast(x + @as(i32, @intCast(j)) * 8 - @as(i32, @intCast(j)) + 1);
+            }
+
+            for (0..64) |j| {
+                const board: u64 = transpose_u64(j << @intCast(y * 8 + 1));
+
+                atk_map = 0;
+
+                if (board & one << @intCast(x + y * 8) == 0) {
+                    const y_change = [_]i32{ 1, -1 };
+
+                    for (y_change) |yc| {
+                        var y2 = y + yc;
+
+                        while (y2 >= 0 and y2 < 8 and board & (one << @intCast(x + y2 * 8)) == 0) {
+                            atk_map |= one << @intCast(x + y2 * 8);
+                            y2 += yc;
+                        }
+
+                        if (y2 >= 0 and y2 < 8 and board & (one << @intCast(x + y2 * 8)) != 0) {
+                            atk_map |= one << @intCast(x + y2 * 8);
+                        }
+                    }
+
+                    for (0..20) |k| {
+                        if (atk_map_rook_v[@intCast(x + y * 4)][k] == atk_map) {
+                            search_table_rook_v[@intCast(x + y * 4)][j] = @intCast(k);
+                            break;
+                        }
+
+                        if (atk_map_rook_v[@intCast(x + y * 4)][k] == 0) {
+                            search_table_rook_v[@intCast(x + y * 4)][j] = @intCast(k);
+                            atk_map_rook_v[@intCast(x + y * 4)][k] = atk_map;
+                            break;
+                        }
+                    }
+                }
+                atk_map = 0;
             }
         }
     }
