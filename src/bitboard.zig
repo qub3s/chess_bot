@@ -64,6 +64,13 @@ pub const bitboard = struct {
         return bitboard{ .board = board, .white_to_move = true };
     }
 
+    pub fn copy(self: *bitboard) bitboard {
+        var new_board: [12]u64 = undefined;
+        @memcpy(&new_board, self.board);
+
+        return bitboard{ .board = new_board, .white_to_move = self.white_to_move };
+    }
+
     pub fn inverse(self: *bitboard) void {
         for (0..6) |i| {
             var tmp: u64 = undefined;
@@ -75,7 +82,7 @@ pub const bitboard = struct {
     }
 
     pub fn display(self: bitboard) void {
-        const pieces = "kqrbkpKQRBKP";
+        const pieces = "kqrbnpKQRBNP";
         var printed: bool = false;
 
         var tmp: u64 = 1;
@@ -103,12 +110,25 @@ pub const bitboard = struct {
         std.debug.print("\n", .{});
     }
 
+    pub fn make_hypothetical_moves(self: *bitboard, p1: u32, p2: u32) bitboard {
+        var cpy = self.copy();
+
+        const one: u64 = 1;
+        for (0..12) |i| {
+            if (self.board[i] & one << p2 != 0) {
+                cpy.board[i] = self.board[i] ^ one << p2;
+            }
+
+            if (self.board[i] & one << p1 != 0) {
+                cpy.board[i] = self.board[i] ^ one << p1;
+                cpy.board[i] = cpy.board ^ one << p2;
+            }
+        }
+        return cpy;
+    }
+
     inline fn create_new_bitboards(self: *bitboard, store: *std.ArrayList(bitboard), piece: u32, moves: u64, piece_pos: u64) !void {
         var pos: u64 = 1;
-
-        std.debug.print("\n", .{});
-        display_u64(moves);
-        std.debug.print("\n", .{});
 
         for (0..64) |_| {
             if (pos & moves != 0) {
@@ -116,7 +136,11 @@ pub const bitboard = struct {
 
                 // copy and remove from original and new position
                 for (0..12) |i| {
-                    new_board[i] = self.board[i] ^ piece_pos ^ pos;
+                    if (i == piece) {
+                        new_board[i] = self.board[i] ^ pos ^ (piece_pos & self.board[i]);
+                    } else {
+                        new_board[i] = self.board[i] ^ (piece_pos & self.board[i]);
+                    }
                 }
 
                 new_board[piece] |= pos;
@@ -161,8 +185,10 @@ pub const bitboard = struct {
                             0 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
                             4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             5 => try self.create_new_bitboards(store, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
-                            6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
-                            10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+
+                            6 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            10 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+                            11 => try self.create_new_bitboards(store, 5, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
                             else => {},
                         }
                     }
@@ -170,7 +196,6 @@ pub const bitboard = struct {
             }
             pos = pos << 1;
         }
-        std.debug.print("Store: {}\n", .{store.items.len});
     }
 };
 

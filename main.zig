@@ -42,6 +42,23 @@ fn vis_board(board: *logic.Board_s) void {
     }
 }
 
+fn vis_board_bb(board: *logic.Board_s) void {
+    const screenWidth = 1000;
+    const screenHeight = 1000;
+    const tile_size = 125;
+
+    vis.ray.InitWindow(screenWidth, screenHeight, "");
+    defer vis.ray.CloseWindow();
+    vis.load_piece_textures() catch return;
+    vis.ray.SetTargetFPS(30);
+
+    while (!vis.ray.WindowShouldClose()) {
+        vis.ray.BeginDrawing();
+        defer vis.ray.EndDrawing();
+        vis.visualize(board, tile_size) catch return;
+    }
+}
+
 fn v_play_hvh() !void {
     var s = static.static_analysis.init();
 
@@ -84,18 +101,22 @@ pub fn main() !void {
     ray.SetTraceLogLevel(5);
     //try bench.benchmark_move_gen();
 
+    try v_play_hvh();
+
     var x = bb.bitboard.init();
     x.display();
     x.inverse();
 
     bb.generate_attackmaps();
 
-    //std.debug.print("\n", .{});
-    //for (0..16) |i| {
-    //    std.debug.print("{}\n", .{i});
-    //    bb.display_u64(bb.rook_masks_h[i]);
-    //    std.debug.print("\n\n", .{});
-    //}
+    var moves = std.ArrayList(bb.bitboard).init(gpa);
+    try x.gen_moves(&moves);
+
+    for (0..moves.items.len) |i| {
+        std.debug.print("{}\n", .{i});
+        bb.bitboard.display(moves.items[i]);
+        std.debug.print("\n\n", .{});
+    }
 
     //try v_play_hvh();
     //try v_play_eve();
