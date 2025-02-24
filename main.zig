@@ -42,7 +42,7 @@ fn vis_board(board: *logic.Board_s) void {
     }
 }
 
-fn vis_board_bb(board: *logic.Board_s) void {
+fn vis_board_bb(board: *bb.bitboard) void {
     const screenWidth = 1000;
     const screenHeight = 1000;
     const tile_size = 125;
@@ -55,7 +55,7 @@ fn vis_board_bb(board: *logic.Board_s) void {
     while (!vis.ray.WindowShouldClose()) {
         vis.ray.BeginDrawing();
         defer vis.ray.EndDrawing();
-        vis.visualize(board, tile_size) catch return;
+        vis.visualize_bb(board, tile_size) catch return;
     }
 }
 
@@ -75,6 +75,13 @@ fn v_play_hvh() !void {
 
     thread.join();
     print("{}\n", .{try board.get_result()});
+}
+
+fn v_play_hvh_bb() !void {
+    var board = bb.bitboard.init();
+    const thread = try std.Thread.spawn(.{}, vis_board_bb, .{&board});
+    print("{}\n", .{vis.vis_thread});
+    thread.join();
 }
 
 fn v_play_eve() !void {
@@ -99,24 +106,23 @@ fn v_play_eve() !void {
 pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
-    //try bench.benchmark_move_gen();
 
-    try v_play_hvh();
+    bb.generate_attackmaps();
+
+    try v_play_hvh_bb();
 
     var x = bb.bitboard.init();
     x.display();
     x.inverse();
 
-    bb.generate_attackmaps();
-
     var moves = std.ArrayList(bb.bitboard).init(gpa);
     try x.gen_moves(&moves);
 
-    for (0..moves.items.len) |i| {
-        std.debug.print("{}\n", .{i});
-        bb.bitboard.display(moves.items[i]);
-        std.debug.print("\n\n", .{});
-    }
+    //for (0..bb.pawn_attacks_white.len) |i| {
+    //    std.debug.print("{}\n", .{i});
+    //    bb.display_u64(bb.pawn_attacks_white[i]);
+    //    std.debug.print("\n\n", .{});
+    //}
 
     //try v_play_hvh();
     //try v_play_eve();

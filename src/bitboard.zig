@@ -66,7 +66,7 @@ pub const bitboard = struct {
 
     pub fn copy(self: *bitboard) bitboard {
         var new_board: [12]u64 = undefined;
-        @memcpy(&new_board, self.board);
+        @memcpy(&new_board, &self.board);
 
         return bitboard{ .board = new_board, .white_to_move = self.white_to_move };
     }
@@ -110,20 +110,37 @@ pub const bitboard = struct {
         std.debug.print("\n", .{});
     }
 
+    pub fn equal(self: bitboard, other: bitboard) bool {
+        if (self.white_to_move != other.white_to_move) {
+            return false;
+        }
+
+        for (0..12) |i| {
+            if (self.board[i] != other.board[i]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     pub fn make_hypothetical_moves(self: *bitboard, p1: u32, p2: u32) bitboard {
         var cpy = self.copy();
 
         const one: u64 = 1;
         for (0..12) |i| {
-            if (self.board[i] & one << p2 != 0) {
-                cpy.board[i] = self.board[i] ^ one << p2;
+            if (self.board[i] & one << @intCast(p2) != 0) {
+                cpy.board[i] = self.board[i] ^ one << @intCast(p2);
             }
 
-            if (self.board[i] & one << p1 != 0) {
-                cpy.board[i] = self.board[i] ^ one << p1;
-                cpy.board[i] = cpy.board ^ one << p2;
+            if (self.board[i] & one << @intCast(p1) != 0) {
+                cpy.board[i] = self.board[i] ^ one << @intCast(p1);
+                cpy.board[i] = cpy.board[i] ^ one << @intCast(p2);
             }
         }
+
+        cpy.white_to_move = !cpy.white_to_move;
+
         return cpy;
     }
 
@@ -137,9 +154,9 @@ pub const bitboard = struct {
                 // copy and remove from original and new position
                 for (0..12) |i| {
                     if (i == piece) {
-                        new_board[i] = self.board[i] ^ pos ^ (piece_pos & self.board[i]);
+                        new_board[i] = self.board[i] ^ pos ^ piece_pos;
                     } else {
-                        new_board[i] = self.board[i] ^ (piece_pos & self.board[i]);
+                        new_board[i] = self.board[i] ^ (pos & self.board[i]);
                     }
                 }
 
@@ -186,9 +203,9 @@ pub const bitboard = struct {
                             4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             5 => try self.create_new_bitboards(store, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
 
-                            6 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
-                            10 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
-                            11 => try self.create_new_bitboards(store, 5, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
+                            //6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+                            //11 => try self.create_new_bitboards(store, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
                             else => {},
                         }
                     }
@@ -196,6 +213,17 @@ pub const bitboard = struct {
             }
             pos = pos << 1;
         }
+    }
+
+    pub fn get_square_value(self: bitboard, pos: u32) i32 {
+        var value: u64 = 1;
+        value = value << @intCast(pos);
+        for (0..12) |i| {
+            if (self.board[i] & value != 0) {
+                return @intCast(i);
+            }
+        }
+        return -1;
     }
 };
 
@@ -225,7 +253,7 @@ fn generate_pawn_attacks() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_attacks_white[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_attacks_black[i] |= one << @intCast(x2 + y2 * 8);
             }
         }
     }
@@ -242,7 +270,7 @@ fn generate_pawn_attacks() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_attacks_black[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_attacks_white[i] |= one << @intCast(x2 + y2 * 8);
             }
         }
     }
@@ -263,7 +291,7 @@ fn generate_pawn_moves() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_moves_white[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_moves_black[i] |= one << @intCast(x2 + y2 * 8);
             }
         }
     }
@@ -280,7 +308,7 @@ fn generate_pawn_moves() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_moves_black[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_moves_white[i] |= one << @intCast(x2 + y2 * 8);
             }
         }
     }

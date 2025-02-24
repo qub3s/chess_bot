@@ -47,9 +47,11 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
         }
     }
 
-    var visible_moves = std.ArrayList(bb.bitboard).init(gpa);
+    //var visible_moves = std.ArrayList(bb.bitboard).init(gpa);
     var all_moves = std.ArrayList(bb.bitboard).init(gpa);
     try board.gen_moves(&all_moves);
+
+    std.debug.print("{}\n", .{all_moves.items.len});
 
     if (click_pos != -1 or first_draw.v) {
         first_draw.v = false;
@@ -57,8 +59,10 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
         // check if move is valid
         if (last_click_pos.v != -1) {
             var temp: i32 = -1;
+            const new_gamestate = board.make_hypothetical_moves(@intCast(last_click_pos.v), @intCast(click_pos));
+
             for (0..all_moves.items.len) |i| {
-                if (all_moves.items[i].x1 + all_moves.items[i].y1 * 8 == last_click_pos.v and all_moves.items[i].x2 + all_moves.items[i].y2 * 8 == click_pos) {
+                if (all_moves.items[i].equal(new_gamestate)) {
                     temp = click_pos;
                     break;
                 }
@@ -68,9 +72,10 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
                 last_click_pos.v = click_pos;
                 click_pos = temp;
             }
+
             // swap board pieces
             if (click_pos != -1) {
-                board.make_move(@intCast(last_click_pos.v), @intCast(click_pos));
+                board.* = board.make_hypothetical_moves(@intCast(last_click_pos.v), @intCast(click_pos));
                 last_click_pos.v = -1;
                 click_pos = -1;
             }
@@ -100,32 +105,32 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
                 ray.DrawRectangle(xmin, ymin, size, size, black_board_tile_color);
             }
 
-            const field_value = board.get(@intCast(x), @intCast(y));
-            if (field_value != 0) {
-                ray.DrawTextureEx(textures_pieces[@intCast(field_value - 1)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
+            const field_value = board.get_square_value(@intCast(x + y * 8));
+            if (field_value != -1) {
+                ray.DrawTextureEx(textures_pieces[@intCast(field_value)], ray.Vector2{ .x = @floatFromInt(xmin), .y = @floatFromInt(ymin) }, 0, @as(f32, @floatFromInt(size)) / 480.0, ray.WHITE);
             }
         }
     }
 
     // collect moves of selected piece
-    for (0..all_moves.items.len) |i| {
-        if (last_click_pos.v == all_moves.items[i].x1 + all_moves.items[i].y1 * 8) {
-            try visible_moves.append(all_moves.items[i].x2 + all_moves.items[i].y2 * 8);
-        }
-    }
+    //for (0..all_moves.items.len) |i| {
+    //    if (last_click_pos.v == all_moves.items[i].x1 + all_moves.items[i].y1 * 8) {
+    //        try visible_moves.append(all_moves.items[i].x2 + all_moves.items[i].y2 * 8);
+    //    }
+    //}
 
     x = 0;
     while (x < 8) : (x += 1) {
         y = 0;
         while (y < 8) : (y += 1) {
-            const xmin = size * (7 - x);
-            const ymin = size * (7 - y);
+            //const xmin = size * (7 - x);
+            //const ymin = size * (7 - y);
 
-            for (0..visible_moves.items.len) |i| {
-                if (visible_moves.items[i] == y * 8 + x) {
-                    ray.DrawCircle(xmin + @divTrunc(size, 2), ymin + @divTrunc(size, 2), @floatFromInt(@divTrunc(size, 6)), ray.DARKBLUE);
-                }
-            }
+            //for (0..visible_moves.items.len) |i| {
+            //    if (visible_moves.items[i] == y * 8 + x) {
+            //        ray.DrawCircle(xmin + @divTrunc(size, 2), ymin + @divTrunc(size, 2), @floatFromInt(@divTrunc(size, 6)), ray.DARKBLUE);
+            //    }
+            //}
         }
     }
 }
@@ -231,6 +236,27 @@ pub fn visualize(board: *logic.Board_s, size: i32) !void {
             }
         }
     }
+}
+
+fn vis_board_bb(board: *bb.bitboard) void {
+    const screenWidth = 1000;
+    const screenHeight = 1000;
+    const tile_size = 125;
+
+    ray.InitWindow(screenWidth, screenHeight, "");
+    defer ray.CloseWindow();
+    load_piece_textures() catch return;
+    ray.SetTargetFPS(30);
+
+    vis_thread = true;
+
+    while (!ray.WindowShouldClose()) {
+        ray.BeginDrawing();
+        defer ray.EndDrawing();
+        visualize_bb(board, tile_size) catch return;
+    }
+
+    vis_thread = false;
 }
 
 fn vis_board(board: *logic.Board_s) void {
