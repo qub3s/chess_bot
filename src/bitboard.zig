@@ -18,11 +18,15 @@ pub var rook_masks_h: [16]u64 = undefined;
 pub var magic_rook_v: [16]u64 = undefined;
 pub var magic_rook_h: [16]u64 = undefined;
 
-pub var atk_map_rook_v: [16][12]u64 = undefined;
-pub var atk_map_rook_h: [16][12]u64 = undefined;
+pub var atk_map_rook_v: [16][20]u64 = undefined;
+pub var atk_map_rook_h: [16][20]u64 = undefined;
 
 pub var search_table_rook_v: [16][64]u4 = undefined;
 pub var search_table_rook_h: [16][64]u4 = undefined;
+
+// left low right high and left high right low
+pub var bishop_masks_llrh: [16]u64 = undefined;
+pub var bishop_masks_lhrl: [16]u64 = undefined;
 
 // 1: rook mask * blockers
 // 2: blockers * magic
@@ -239,9 +243,6 @@ pub const bitboard = struct {
         const v: u64 = atk_map_rook_v[elem][search_table_rook_v[elem][@mulWithOverflow(magic_rook_v[elem], (rook_masks_v[elem] & board))[0] >> 58]];
         const h: u64 = atk_map_rook_h[elem][search_table_rook_h[elem][@mulWithOverflow(magic_rook_h[elem], (rook_masks_h[elem] & board))[0] >> 58]];
 
-        display_u64(v);
-        std.debug.print("\n\n", .{});
-
         board = v | h;
 
         if (square % 8 >= 4) {
@@ -253,9 +254,6 @@ pub const bitboard = struct {
         }
 
         board = board ^ (board & own_pieces);
-
-        display_u64(board);
-        std.debug.print("\n\n--------------------------------\n", .{});
 
         return board;
     }
@@ -280,7 +278,8 @@ pub fn generate_attackmaps() void {
 
     generate_rook_masks();
     generate_rook_attacks();
-    //generate_bishop_masks();
+
+    generate_bishop_masks();
 }
 
 fn generate_pawn_attacks() void {
@@ -401,6 +400,55 @@ fn generate_knight_moves() void {
     }
 }
 
+fn generate_bishop_masks() void {
+    const one: u64 = 1;
+
+    for (0..32) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        if (x < 4 and y < 4) {
+            const x_change = [_]i32{ 1, -1 };
+            const y_change = [_]i32{ 1, -1 };
+
+            for (x_change, y_change) |xc, yc| {
+                var x2 = x + xc;
+                var y2 = y + yc;
+
+                while (y2 > 0 and y2 < 7 and x2 > 0 and x2 < 7) {
+                    bishop_masks_lhrl[@intCast(x + y * 4)] |= one << @intCast(x2 + y2 * 8);
+
+                    x2 += xc;
+                    y2 += yc;
+                }
+            }
+            //display_u64(bishop_masks_lhrl[@intCast(x + y * 4)]);
+            //std.debug.print("\n\n", .{});
+        }
+
+        if (x < 4 and y < 4) {
+            const x_change = [_]i32{ -1, 1 };
+            const y_change = [_]i32{ 1, -1 };
+
+            for (x_change, y_change) |xc, yc| {
+                var x2 = x + xc;
+                var y2 = y + yc;
+
+                while (y2 > 0 and y2 < 7 and x2 > 0 and x2 < 7) {
+                    bishop_masks_llrh[@intCast(x + y * 4)] |= one << @intCast(x2 + y2 * 8);
+
+                    x2 += xc;
+                    y2 += yc;
+                }
+            }
+            //display_u64(bishop_masks_llrh[@intCast(x + y * 4)]);
+            //std.debug.print("\n\n", .{});
+        }
+    }
+}
+
+fn generate_rook_attacks() void {}
+
 fn generate_rook_masks() void {
     const one: u64 = 1;
 
@@ -473,10 +521,7 @@ fn generate_rook_attacks() void {
             magic_rook_h[@intCast(x + 4 * y)] = std.math.pow(u64, 2, @intCast((7 - y) * 8 + 1));
 
             for (0..64) |j| {
-                const board: u64 = transpose_u64(j) << @intCast(x);
-                //std.debug.print("{} | {}\n", .{ x, y });
-                //display_u64(board);
-                //std.debug.print("\n\n\n", .{});
+                const board: u64 = j << @intCast(y * 8 + 1);
 
                 atk_map = 0;
 
@@ -496,7 +541,7 @@ fn generate_rook_attacks() void {
                         }
                     }
 
-                    for (0..20) |k| {
+                    for (0..12) |k| {
                         if (atk_map_rook_h[@intCast(x + y * 4)][k] == atk_map) {
                             search_table_rook_h[@intCast(x + y * 4)][j] = @intCast(k);
                             break;
@@ -505,6 +550,7 @@ fn generate_rook_attacks() void {
                         if (atk_map_rook_h[@intCast(x + y * 4)][k] == 0) {
                             search_table_rook_h[@intCast(x + y * 4)][j] = @intCast(k);
                             atk_map_rook_h[@intCast(x + y * 4)][k] = atk_map;
+
                             break;
                         }
                     }
@@ -524,16 +570,26 @@ fn generate_rook_attacks() void {
 
         if (x < 4 and y < 4) {
             for (0..8) |j| {
-                magic_rook_v[@intCast(x + 4 * y)] |= one << @intCast(x + @as(i32, @intCast(j)) * 8 - @as(i32, @intCast(j)) + 1);
+                magic_rook_v[@intCast(x + 4 * y)] |= one << @intCast(7 - x + @as(i32, @intCast(j)) * 8 - @as(i32, @intCast(j)) + 1);
             }
 
             for (0..64) |j| {
-                const board: u64 = transpose_u64(j << @intCast(y * 8 + 1));
+                const board: u64 = transpose_u64(j << 1) << @intCast(x);
+                //std.debug.print("\n", .{});
+                //std.debug.print("start: \n", .{});
+                //display_u64(board);
+                //std.debug.print("\n\n", .{});
+                //display_u64(@mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0]);
+                //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0] >> 58 });
 
                 atk_map = 0;
 
                 if (board & one << @intCast(x + y * 8) == 0) {
                     const y_change = [_]i32{ 1, -1 };
+
+                    //std.debug.print("{} - {} ----------------\n", .{ x, y });
+                    //display_u64(board);
+                    //std.debug.print("\n\n\n", .{});
 
                     for (y_change) |yc| {
                         var y2 = y + yc;
@@ -548,7 +604,10 @@ fn generate_rook_attacks() void {
                         }
                     }
 
-                    for (0..32) |k| {
+                    //display_u64(atk_map);
+                    //std.debug.print("\n\n\n", .{});
+
+                    for (0..20) |k| {
                         if (atk_map_rook_v[@intCast(x + y * 4)][k] == atk_map) {
                             search_table_rook_v[@intCast(x + y * 4)][j] = @intCast(k);
                             break;

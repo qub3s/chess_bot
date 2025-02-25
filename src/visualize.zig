@@ -51,7 +51,7 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
     var all_moves = std.ArrayList(bb.bitboard).init(gpa);
     try board.gen_moves(&all_moves);
 
-    std.debug.print("{}\n", .{all_moves.items.len});
+    //std.debug.print("{}\n", .{all_moves.items.len});
 
     if (click_pos != -1 or first_draw.v) {
         first_draw.v = false;

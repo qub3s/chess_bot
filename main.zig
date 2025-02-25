@@ -109,7 +109,7 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    //try v_play_hvh_bb();
+    try v_play_hvh_bb();
 
     //var x = bb.bitboard.init();
     //x.display();
