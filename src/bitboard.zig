@@ -85,7 +85,7 @@ pub const bitboard = struct {
         const pieces = "kqrbnpKQRBNP";
         var printed: bool = false;
 
-        var tmp: u64 = 1;
+        var tmp: u64 = 0x8000000000000000;
         for (0..64) |pos| {
             if (pos != 0 and pos % 8 == 0) {
                 std.debug.print("\n", .{});
@@ -105,7 +105,7 @@ pub const bitboard = struct {
                 std.debug.print(". ", .{});
             }
 
-            tmp = tmp << 1;
+            tmp = tmp >> 1;
         }
         std.debug.print("\n", .{});
     }
@@ -200,12 +200,16 @@ pub const bitboard = struct {
                     if (self.board[j] & pos != 0) {
                         switch (j) {
                             0 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            1 => try self.create_new_bitboards(store, 1, gen_rooks(all_pieces, own_pieces, i), pos),
+                            2 => try self.create_new_bitboards(store, 2, gen_rooks(all_pieces, own_pieces, i), pos),
                             4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             5 => try self.create_new_bitboards(store, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
 
-                            //6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            6 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            //7 => try self.create_new_bitboards(store, 7, gen_rooks(all_pieces, own_pieces, i), pos),
+                            //8 => try self.create_new_bitboards(store, 8, gen_rooks(all_pieces, own_pieces, i), pos),
                             10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
-                            //11 => try self.create_new_bitboards(store, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
+                            11 => try self.create_new_bitboards(store, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
                             else => {},
                         }
                     }
@@ -213,6 +217,47 @@ pub const bitboard = struct {
             }
             pos = pos << 1;
         }
+    }
+
+    fn gen_rooks(bo: u64, own_pieces: u64, square: usize) u64 {
+        var board: u64 = bo;
+        var x = square % 8;
+        var y = square / 8;
+
+        if (x >= 4) {
+            board = inverse_vertical_u64(board);
+            x = 7 - x;
+        }
+
+        if (y >= 4) {
+            board = inverse_horizontal_u64(board);
+            y = 7 - y;
+        }
+
+        const elem = x + y * 4;
+
+        const v: u64 = atk_map_rook_v[elem][search_table_rook_v[elem][@mulWithOverflow(magic_rook_v[elem], (rook_masks_v[elem] & board))[0] >> 58]];
+        const h: u64 = atk_map_rook_h[elem][search_table_rook_h[elem][@mulWithOverflow(magic_rook_h[elem], (rook_masks_h[elem] & board))[0] >> 58]];
+
+        display_u64(v);
+        std.debug.print("\n\n", .{});
+
+        board = v | h;
+
+        if (square % 8 >= 4) {
+            board = inverse_vertical_u64(board);
+        }
+
+        if (square / 8 >= 4) {
+            board = inverse_horizontal_u64(board);
+        }
+
+        board = board ^ (board & own_pieces);
+
+        display_u64(board);
+        std.debug.print("\n\n--------------------------------\n", .{});
+
+        return board;
     }
 
     pub fn get_square_value(self: bitboard, pos: u32) i32 {
@@ -428,7 +473,10 @@ fn generate_rook_attacks() void {
             magic_rook_h[@intCast(x + 4 * y)] = std.math.pow(u64, 2, @intCast((7 - y) * 8 + 1));
 
             for (0..64) |j| {
-                const board: u64 = j << @intCast(y * 8 + 1);
+                const board: u64 = transpose_u64(j) << @intCast(x);
+                std.debug.print("{} | {}\n", .{ x, y });
+                display_u64(board);
+                std.debug.print("\n\n\n", .{});
 
                 atk_map = 0;
 
@@ -500,7 +548,7 @@ fn generate_rook_attacks() void {
                         }
                     }
 
-                    for (0..20) |k| {
+                    for (0..32) |k| {
                         if (atk_map_rook_v[@intCast(x + y * 4)][k] == atk_map) {
                             search_table_rook_v[@intCast(x + y * 4)][j] = @intCast(k);
                             break;
@@ -520,7 +568,7 @@ fn generate_rook_attacks() void {
 }
 
 pub fn display_u64(b: u64) void {
-    var tmp: u64 = 1;
+    var tmp: u64 = 0x8000000000000000;
 
     for (0..64) |i| {
         if (i % 8 == 0 and i != 0) {
@@ -532,7 +580,7 @@ pub fn display_u64(b: u64) void {
         } else {
             std.debug.print(". ", .{});
         }
-        tmp = tmp << 1;
+        tmp = tmp >> 1;
     }
 }
 
@@ -541,7 +589,7 @@ pub inline fn inverse_horizontal_u64(b: u64) u64 {
 }
 
 pub inline fn inverse_vertical_u64(b: u64) u64 {
-    return (0xf0f0f0f0f0f0f0f0 & b) >> 4 | (0x0f0f0f0f0f0f0f & b) << 4;
+    return (0x8080808080808080 & b) >> 7 | (0x0101010101010101 & b) << 7 | (0x4040404040404040 & b) >> 5 | (0x0202020202020202 & b) << 5 | (0x2020202020202020 & b) >> 3 | (0x0404040404040404 & b) << 3 | (0x1010101010101010 & b) >> 1 | (0x0808080808080808 & b) << 1;
 }
 
 pub inline fn transpose_u64(b: u64) u64 {
@@ -559,33 +607,3 @@ pub inline fn transpose_u64(b: u64) u64 {
 
     return copy;
 }
-
-//fn generate_bishop_masks() void {
-//    const one: u64 = 1;
-//    // all bordering bits
-//    const remove: u64 = 0xff818181818181ff;
-//
-//    for (0..64) |i| {
-//        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
-//        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
-//
-//        if (x < 4 and y < 4) {
-//            const x_change = [_]i32{ -1, -1, 1, 1 };
-//            const y_change = [_]i32{ 1, -1, 1, -1 };
-//
-//            for (x_change, y_change) |xc, yc| {
-//                var x2 = x + xc;
-//                var y2 = y + yc;
-//
-//                while (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-//                    bishop_masks_dl[i] |= one << @intCast(x2 + y2 * 8);
-//
-//                    x2 += xc;
-//                    y2 += yc;
-//                }
-//            }
-//
-//            bishop_masks_dl[i] ^= (bishop_masks_dl[i] & remove);
-//        }
-//    }
-//}

@@ -111,12 +111,12 @@ pub fn main() !void {
 
     try v_play_hvh_bb();
 
-    var x = bb.bitboard.init();
-    x.display();
-    x.inverse();
+    //var x = bb.bitboard.init();
+    //x.display();
+    //x.inverse();
 
-    var moves = std.ArrayList(bb.bitboard).init(gpa);
-    try x.gen_moves(&moves);
+    //var moves = std.ArrayList(bb.bitboard).init(gpa);
+    //try x.gen_moves(&moves);
 
     //for (0..bb.pawn_attacks_white.len) |i| {
     //    std.debug.print("{}\n", .{i});
