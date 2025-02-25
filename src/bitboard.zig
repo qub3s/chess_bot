@@ -474,9 +474,9 @@ fn generate_rook_attacks() void {
 
             for (0..64) |j| {
                 const board: u64 = transpose_u64(j) << @intCast(x);
-                std.debug.print("{} | {}\n", .{ x, y });
-                display_u64(board);
-                std.debug.print("\n\n\n", .{});
+                //std.debug.print("{} | {}\n", .{ x, y });
+                //display_u64(board);
+                //std.debug.print("\n\n\n", .{});
 
                 atk_map = 0;
 
