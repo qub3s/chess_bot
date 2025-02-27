@@ -28,6 +28,9 @@ pub var search_table_rook_h: [16][64]u4 = undefined;
 pub var bishop_masks_llrh: [16]u64 = undefined;
 pub var bishop_masks_lhrl: [16]u64 = undefined;
 
+pub var magic_bishop_llrh: [16]u64 = undefined;
+pub var magic_bishop_lhrl: [16]u64 = undefined;
+
 // 1: rook mask * blockers
 // 2: blockers * magic
 // 3: search table lookup
@@ -280,6 +283,7 @@ pub fn generate_attackmaps() void {
     generate_rook_attacks();
 
     generate_bishop_masks();
+    generate_bishop_attacks();
 }
 
 fn generate_pawn_attacks() void {
@@ -447,7 +451,44 @@ fn generate_bishop_masks() void {
     }
 }
 
-fn generate_rook_attacks() void {}
+fn generate_bishop_attacks() void {
+    const one: u64 = 1;
+
+    for (0..32) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        if (x < 4 and y < 4) {
+            for (0..64) |j| {
+                var board: u64 = 0;
+                var shift: u64 = 1;
+
+                for (0..16) |k| {
+                    const tx: i32 = -8 + x + @as(i32, @intCast(k));
+                    const ty: i32 = -8 + y + @as(i32, @intCast(k));
+
+                    if (tx > 0 and tx < 7 and ty > 0 and ty < 7) {
+                        if (j & shift != 0) {
+                            board |= one << @intCast((ty * 8) + tx);
+                        }
+                        shift = shift << 1;
+                    }
+                }
+
+                std.debug.print("{}\n", .{j});
+                display_u64(board);
+                std.debug.print("\n\n", .{});
+                display_u64(one << @intCast(x + y * 8));
+                std.debug.print("\n\n", .{});
+            }
+
+            //std.debug.print("\n", .{});
+            //std.debug.print("start: \n", .{});
+            //display_u64(@mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0]);
+            //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0] >> 58 });
+        }
+    }
+}
 
 fn generate_rook_masks() void {
     const one: u64 = 1;
