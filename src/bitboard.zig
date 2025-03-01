@@ -459,7 +459,16 @@ fn generate_bishop_attacks() void {
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
         if (x < 4 and y < 4) {
-            //magic_bishop_lhrl[@intCast(x + 4 * y)] = std.math.pow(u64, 2, @intCast((7 - y) * 8 + 1));
+            // find first square
+            const x_low = x - @min(x, y) + 1;
+            const y_low = y - @min(x, y) + 1;
+            std.debug.print("{} : {}\n", .{ x_low, y_low });
+            display_u64(one << @intCast(x_low + y_low * 8));
+            std.debug.print("\n\n", .{});
+            display_u64(@mulWithOverflow(one << @intCast(x_low + y_low * 8), one << @intCast(58 - (x_low + y_low * 8)))[0]);
+            std.debug.print("\n\n", .{});
+
+            //magic_bishop_lhrl[@intCast(x + y * 4)] |= ;
 
             for (0..64) |j| {
                 var board: u64 = 0;
@@ -477,9 +486,9 @@ fn generate_bishop_attacks() void {
                     }
                 }
 
-                std.debug.print("{}\n", .{j});
-                display_u64(board);
-                std.debug.print("\n\n", .{});
+                //std.debug.print("{}\n", .{j});
+                //display_u64(board);
+                //std.debug.print("\n\n", .{});
             }
 
             //std.debug.print("\n", .{});
