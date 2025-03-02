@@ -460,15 +460,21 @@ fn generate_bishop_attacks() void {
 
         if (x < 4 and y < 4) {
             // find first square
+            magic_bishop_lhrl[@intCast(x + y * 4)] = 0;
             const x_low = x - @min(x, y) + 1;
             const y_low = y - @min(x, y) + 1;
-            std.debug.print("{} : {}\n", .{ x_low, y_low });
-            display_u64(one << @intCast(x_low + y_low * 8));
-            std.debug.print("\n\n", .{});
-            display_u64(@mulWithOverflow(one << @intCast(x_low + y_low * 8), one << @intCast(58 - (x_low + y_low * 8)))[0]);
-            std.debug.print("\n\n", .{});
 
-            //magic_bishop_lhrl[@intCast(x + y * 4)] |= ;
+            var o: i32 = 0;
+            while (58 - (x_low + y_low * 8) - o >= 0) {
+                magic_bishop_lhrl[@intCast(x + y * 4)] |= one << @intCast(58 - (x_low + y_low * 8) - o);
+                o += 8;
+            }
+
+            //std.debug.print("{} : {}\n", .{ x_low, y_low });
+            //display_u64(one << @intCast(x_low + y_low * 8));
+            //std.debug.print("\n\n", .{});
+            //display_u64(@mulWithOverflow(one << @intCast(x_low + y_low * 8), magic_bishop_lhrl[@intCast(x + y * 4)])[0]);
+            //std.debug.print("\n\n", .{});
 
             for (0..64) |j| {
                 var board: u64 = 0;
@@ -486,9 +492,11 @@ fn generate_bishop_attacks() void {
                     }
                 }
 
-                //std.debug.print("{}\n", .{j});
-                //display_u64(board);
-                //std.debug.print("\n\n", .{});
+                std.debug.print("{}\n", .{j});
+                display_u64(board);
+                std.debug.print("\n\n", .{});
+                display_u64(@mulWithOverflow(board, magic_bishop_lhrl[@intCast(x + y * 4)])[0]);
+                std.debug.print("\n\n", .{});
             }
 
             //std.debug.print("\n", .{});
