@@ -480,9 +480,9 @@ fn generate_bishop_attacks() void {
                 var board: u64 = 0;
                 var shift: u64 = 1;
 
-                for (0..16) |k| {
-                    const tx: i32 = -8 + x + @as(i32, @intCast(k));
-                    const ty: i32 = -8 + y + @as(i32, @intCast(k));
+                for (0..8) |k| {
+                    const tx = x - @min(x, y) + 1 + @as(i32, @intCast(k));
+                    const ty = y - @min(x, y) + 1 + @as(i32, @intCast(k));
 
                     if (tx > 0 and tx < 7 and ty > 0 and ty < 7) {
                         if (j & shift != 0) {
@@ -492,17 +492,60 @@ fn generate_bishop_attacks() void {
                     }
                 }
 
-                std.debug.print("{}\n", .{j});
-                display_u64(board);
-                std.debug.print("\n\n", .{});
-                display_u64(@mulWithOverflow(board, magic_bishop_lhrl[@intCast(x + y * 4)])[0]);
-                std.debug.print("\n\n", .{});
+                std.debug.print("\n", .{});
+                std.debug.print("start: \n", .{});
+                std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_bishop_lhrl[@intCast(x + 4 * y)])[0] >> 58 });
+            }
+        }
+    }
+
+    for (0..32) |i| {
+        const x: i32 = @mod(@as(i32, @intCast(i)), 8);
+        const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
+
+        if (x < 4 and y < 4) {
+            // find first square
+            magic_bishop_lhrl[@intCast(x + y * 4)] = 0;
+            const x_low = x + @min(7 - x, y) - 1;
+            const y_low = y - @min(x, y) + 1;
+
+            var o: i32 = 0;
+            while (58 - (x_low + y_low * 8) - o >= 0) {
+                magic_bishop_llrh[@intCast(x + y * 4)] |= one << @intCast(58 - (x_low + y_low * 8) - o);
+                o += 6;
             }
 
-            //std.debug.print("\n", .{});
-            //std.debug.print("start: \n", .{});
-            //display_u64(@mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0]);
-            //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0] >> 58 });
+            //std.debug.print("{} : {}\n", .{ x_low, y_low });
+            //display_u64(one << @intCast(x_low + y_low * 8));
+            //std.debug.print("\n\n", .{});
+            //display_u64(@mulWithOverflow(one << @intCast(x_low + y_low * 8), magic_bishop_llrh[@intCast(x + y * 4)])[0]);
+            //std.debug.print("\n\n", .{});
+            //display_u64(magic_bishop_llrh[@intCast(x + y * 4)]);
+            //std.debug.print("\n\n", .{});
+
+            for (0..64) |j| {
+                var board: u64 = 0;
+                var shift: u64 = 1;
+
+                for (0..8) |k| {
+                    const tx = x + @min(7 - x, y) - 1 - @as(i32, @intCast(k));
+                    const ty = y - @min(x, y) + 1 + @as(i32, @intCast(k));
+
+                    if (tx > 0 and tx < 7 and ty > 0 and ty < 7) {
+                        if (j & shift != 0) {
+                            board |= one << @intCast((ty * 8) + tx);
+                        }
+                        shift = shift << 1;
+                    }
+                }
+
+                //std.debug.print("\n", .{});
+                //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_bishop_llrh[@intCast(x + 4 * y)])[0] >> 58 });
+                //display_u64(board);
+                //std.debug.print("\n\n", .{});
+                //display_u64(@mulWithOverflow(board, magic_bishop_llrh[@intCast(x + 4 * y)])[0]);
+                //std.debug.print("\n\n", .{});
+            }
         }
     }
 }
