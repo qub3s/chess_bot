@@ -107,9 +107,19 @@ pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
 
+    //var t: u64 = 342589439504;
+
+    //bb.display_u64(t);
+    //std.debug.print("\n\n\n", .{});
+    //t = bb.inverse_horizontal_u64(t);
+    //bb.display_u64(t);
+    //std.debug.print("\n\n\n", .{});
+    //t = bb.inverse_horizontal_u64(t);
+    //bb.display_u64(t);
+
     bb.generate_attackmaps();
 
-    //try v_play_hvh_bb();
+    try v_play_hvh_bb();
 
     //var x = bb.bitboard.init();
     //x.display();

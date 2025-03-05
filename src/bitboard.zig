@@ -213,15 +213,16 @@ pub const bitboard = struct {
                     if (self.board[j] & pos != 0) {
                         switch (j) {
                             0 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
-                            1 => try self.create_new_bitboards(store, 1, gen_rooks(all_pieces, own_pieces, i), pos),
+                            1 => try self.create_new_bitboards(store, 1, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
                             2 => try self.create_new_bitboards(store, 2, gen_rooks(all_pieces, own_pieces, i), pos),
                             3 => try self.create_new_bitboards(store, 3, gen_bishops(all_pieces, own_pieces, i), pos),
                             4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             5 => try self.create_new_bitboards(store, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
 
-                            6 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
-                            //7 => try self.create_new_bitboards(store, 7, gen_rooks(all_pieces, own_pieces, i), pos),
-                            //8 => try self.create_new_bitboards(store, 8, gen_rooks(all_pieces, own_pieces, i), pos),
+                            6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            7 => try self.create_new_bitboards(store, 7, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
+                            8 => try self.create_new_bitboards(store, 8, gen_rooks(all_pieces, own_pieces, i), pos),
+                            9 => try self.create_new_bitboards(store, 9, gen_bishops(all_pieces, own_pieces, i), pos),
                             10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             11 => try self.create_new_bitboards(store, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
                             else => {},
@@ -288,13 +289,15 @@ pub const bitboard = struct {
         const v: u64 = atk_map_bishop_llrh[elem][search_table_bishop_llrh[elem][@mulWithOverflow(magic_bishop_llrh[elem], (bishop_masks_llrh[elem] & board))[0] >> 58]];
         const h: u64 = atk_map_bishop_lhrl[elem][search_table_bishop_lhrl[elem][@mulWithOverflow(magic_bishop_lhrl[elem], (bishop_masks_lhrl[elem] & board))[0] >> 58]];
 
-        //std.debug.print("{} - {}\n", .{ x, y });
-        //std.debug.print("{}\n", .{@mulWithOverflow(magic_bishop_llrh[elem], (bishop_masks_llrh[elem] & board))[0] >> 58});
+        std.debug.print("{} - {}\n", .{ x, y });
+        std.debug.print("{}\n", .{@mulWithOverflow(magic_bishop_llrh[elem], (bishop_masks_llrh[elem] & board))[0] >> 58});
+        std.debug.print("{}\n", .{@mulWithOverflow(magic_bishop_lhrl[elem], (bishop_masks_lhrl[elem] & board))[0] >> 58});
+
         //display_u64(magic_bishop_llrh[elem]);
-        //std.debug.print("\n\n", .{});
         //display_u64(bishop_masks_llrh[elem] & board);
         //std.debug.print("\n\n", .{});
         //display_u64(board);
+        //std.debug.print("\n\n\n", .{});
         //std.debug.print("\n\n", .{});
         //display_u64(v);
         //std.debug.print("\n\n", .{});
@@ -302,19 +305,27 @@ pub const bitboard = struct {
         //std.debug.print("\n\n", .{});
 
         board = v | h;
-
+        std.debug.print("\nBoard: {}:{}\n", .{ x, y });
         display_u64(board);
-        std.debug.print("\n\n", .{});
-
-        if (square % 8 >= 4) {
-            board = inverse_vertical_u64(board);
-        }
+        std.debug.print("\n", .{});
 
         if (square / 8 >= 4) {
             board = inverse_horizontal_u64(board);
         }
 
+        std.debug.print("\n", .{});
+        display_u64(board);
+        std.debug.print("\n", .{});
+
+        if (square % 8 >= 4) {
+            board = inverse_vertical_u64(board);
+        }
+
         board = board ^ (board & own_pieces);
+
+        std.debug.print("\n", .{});
+        display_u64(board);
+        std.debug.print("\n\n", .{});
 
         return board;
     }
@@ -544,13 +555,6 @@ fn generate_bishop_attacks() void {
                     }
                 }
 
-                //std.debug.print("\n", .{});
-                //std.debug.print("start: \n", .{});
-                //display_u64(board);
-                //std.debug.print("\n\n", .{});
-                //display_u64(@mulWithOverflow(board, magic_bishop_lhrl[@intCast(x + 4 * y)])[0]);
-                //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_bishop_lhrl[@intCast(x + 4 * y)])[0] >> 58 });
-
                 var atk_map: u64 = 0;
 
                 if (board & one << @intCast(x + y * 8) == 0) {
@@ -571,6 +575,14 @@ fn generate_bishop_attacks() void {
                             atk_map |= one << @intCast(x2 + y2 * 8);
                         }
                     }
+
+                    //std.debug.print("Pos:\n", .{});
+                    //display_u64(one << @intCast(x + y * 8));
+                    //std.debug.print("\nBoard:\n", .{});
+                    //display_u64(board);
+                    //std.debug.print("\nAtk Map: \n", .{});
+                    //display_u64(atk_map);
+                    //std.debug.print("\n\n\n", .{});
 
                     for (0..12) |k| {
                         if (atk_map_bishop_lhrl[@intCast(x + y * 4)][k] == atk_map) {
@@ -596,8 +608,8 @@ fn generate_bishop_attacks() void {
         if (x < 4 and y < 4) {
             // find first square
             magic_bishop_llrh[@intCast(x + y * 4)] = 0;
-            const x_low = x + @min(7 - x, y) - 1;
-            const y_low = y - @min(x, y) + 1;
+            const x_low = x + y - 1;
+            const y_low = y - y + 1;
 
             var o: i32 = 0;
             while (58 - (x_low + y_low * 8) - o >= 0) {
@@ -610,8 +622,8 @@ fn generate_bishop_attacks() void {
                 var shift: u64 = 1;
 
                 for (0..8) |k| {
-                    const tx = x + @min(7 - x, y) - 1 - @as(i32, @intCast(k));
-                    const ty = y - @min(x, y) + 1 + @as(i32, @intCast(k));
+                    const tx = x + y - 1 - @as(i32, @intCast(k));
+                    const ty = y - y + 1 + @as(i32, @intCast(k));
 
                     if (tx > 0 and tx < 7 and ty > 0 and ty < 7) {
                         if (j & shift != 0) {
@@ -620,13 +632,6 @@ fn generate_bishop_attacks() void {
                         shift = shift << 1;
                     }
                 }
-
-                //std.debug.print("\n", .{});
-                //std.debug.print("start: \n", .{});
-                //display_u64(board);
-                //std.debug.print("\n\n", .{});
-                //display_u64(@mulWithOverflow(board, magic_bishop_llrh[@intCast(x + 4 * y)])[0]);
-                //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_bishop_llrh[@intCast(x + 4 * y)])[0] >> 58 });
 
                 var atk_map: u64 = 0;
                 if (board & one << @intCast(x + y * 8) == 0) {
@@ -648,13 +653,13 @@ fn generate_bishop_attacks() void {
                         }
                     }
 
-                    //std.debug.print("Pos:\n", .{});
+                    //std.debug.print("Pos: {} - {}\n", .{ x, y });
                     //display_u64(one << @intCast(x + y * 8));
-                    //std.debug.print("\n\n", .{});
+                    //std.debug.print("\nBoard:\n", .{});
                     //display_u64(board);
-                    //std.debug.print("\n\n", .{});
+                    //std.debug.print("\nAtk Map: \n", .{});
                     //display_u64(atk_map);
-                    //std.debug.print("\n\n", .{});
+                    //std.debug.print("\n\n\n", .{});
 
                     for (0..12) |k| {
                         if (atk_map_bishop_llrh[@intCast(x + y * 4)][k] == atk_map) {
@@ -870,7 +875,7 @@ pub fn display_u64(b: u64) void {
 }
 
 pub inline fn inverse_horizontal_u64(b: u64) u64 {
-    return b << 56 | (0xff00 & b) << 40 | (0xff0000 & b) << 24 | (0xff000000 & b) << 8 | b >> 56 | (0xff000000000000 & b) >> 40 | (0xff0000000000 & b) >> 24 | (0xff0000000 & b) >> 8;
+    return b << 56 | (0xff00 & b) << 40 | (0xff0000 & b) << 24 | (0xff000000 & b) << 8 | b >> 56 | (0xff000000000000 & b) >> 40 | (0xff0000000000 & b) >> 24 | (0xff00000000 & b) >> 8;
 }
 
 pub inline fn inverse_vertical_u64(b: u64) u64 {
