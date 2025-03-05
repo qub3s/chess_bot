@@ -51,12 +51,6 @@ pub const bitboard = struct {
     board: [12]u64,
     white_to_move: bool,
 
-    // create attack maps
-    // create move maps
-    // export to
-    // get game result
-    // get possible moves
-
     pub fn init() bitboard {
         var board = std.mem.zeroes([12]u64);
 
@@ -289,43 +283,17 @@ pub const bitboard = struct {
         const v: u64 = atk_map_bishop_llrh[elem][search_table_bishop_llrh[elem][@mulWithOverflow(magic_bishop_llrh[elem], (bishop_masks_llrh[elem] & board))[0] >> 58]];
         const h: u64 = atk_map_bishop_lhrl[elem][search_table_bishop_lhrl[elem][@mulWithOverflow(magic_bishop_lhrl[elem], (bishop_masks_lhrl[elem] & board))[0] >> 58]];
 
-        std.debug.print("{} - {}\n", .{ x, y });
-        std.debug.print("{}\n", .{@mulWithOverflow(magic_bishop_llrh[elem], (bishop_masks_llrh[elem] & board))[0] >> 58});
-        std.debug.print("{}\n", .{@mulWithOverflow(magic_bishop_lhrl[elem], (bishop_masks_lhrl[elem] & board))[0] >> 58});
-
-        //display_u64(magic_bishop_llrh[elem]);
-        //display_u64(bishop_masks_llrh[elem] & board);
-        //std.debug.print("\n\n", .{});
-        //display_u64(board);
-        //std.debug.print("\n\n\n", .{});
-        //std.debug.print("\n\n", .{});
-        //display_u64(v);
-        //std.debug.print("\n\n", .{});
-        //display_u64(bishop_masks_llrh[elem] & board | bishop_masks_llrh[elem] & board);
-        //std.debug.print("\n\n", .{});
-
         board = v | h;
-        std.debug.print("\nBoard: {}:{}\n", .{ x, y });
-        display_u64(board);
-        std.debug.print("\n", .{});
 
         if (square / 8 >= 4) {
             board = inverse_horizontal_u64(board);
         }
-
-        std.debug.print("\n", .{});
-        display_u64(board);
-        std.debug.print("\n", .{});
 
         if (square % 8 >= 4) {
             board = inverse_vertical_u64(board);
         }
 
         board = board ^ (board & own_pieces);
-
-        std.debug.print("\n", .{});
-        display_u64(board);
-        std.debug.print("\n\n", .{});
 
         return board;
     }
@@ -495,8 +463,6 @@ fn generate_bishop_masks() void {
                     y2 += yc;
                 }
             }
-            //display_u64(bishop_masks_lhrl[@intCast(x + y * 4)]);
-            //std.debug.print("\n\n", .{});
         }
 
         if (x < 4 and y < 4) {
@@ -514,8 +480,6 @@ fn generate_bishop_masks() void {
                     y2 += yc;
                 }
             }
-            //display_u64(bishop_masks_llrh[@intCast(x + y * 4)]);
-            //std.debug.print("\n\n", .{});
         }
     }
 }
@@ -575,14 +539,6 @@ fn generate_bishop_attacks() void {
                             atk_map |= one << @intCast(x2 + y2 * 8);
                         }
                     }
-
-                    //std.debug.print("Pos:\n", .{});
-                    //display_u64(one << @intCast(x + y * 8));
-                    //std.debug.print("\nBoard:\n", .{});
-                    //display_u64(board);
-                    //std.debug.print("\nAtk Map: \n", .{});
-                    //display_u64(atk_map);
-                    //std.debug.print("\n\n\n", .{});
 
                     for (0..12) |k| {
                         if (atk_map_bishop_lhrl[@intCast(x + y * 4)][k] == atk_map) {
@@ -652,14 +608,6 @@ fn generate_bishop_attacks() void {
                             atk_map |= one << @intCast(x2 + y2 * 8);
                         }
                     }
-
-                    //std.debug.print("Pos: {} - {}\n", .{ x, y });
-                    //display_u64(one << @intCast(x + y * 8));
-                    //std.debug.print("\nBoard:\n", .{});
-                    //display_u64(board);
-                    //std.debug.print("\nAtk Map: \n", .{});
-                    //display_u64(atk_map);
-                    //std.debug.print("\n\n\n", .{});
 
                     for (0..12) |k| {
                         if (atk_map_bishop_llrh[@intCast(x + y * 4)][k] == atk_map) {
@@ -785,11 +733,6 @@ fn generate_rook_attacks() void {
                             break;
                         }
                     }
-
-                    //std.debug.print("\n\n\n\n", .{});
-                    //display_u64(board);
-                    //std.debug.print("\n\n", .{});
-                    //display_u64(atk_map);
                 }
             }
         }
@@ -806,21 +749,11 @@ fn generate_rook_attacks() void {
 
             for (0..64) |j| {
                 const board: u64 = transpose_u64(j << 1) << @intCast(x);
-                //std.debug.print("\n", .{});
-                //std.debug.print("start: \n", .{});
-                //display_u64(board);
-                //std.debug.print("\n\n", .{});
-                //display_u64(@mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0]);
-                //std.debug.print("{} - {}\n\n", .{ j, @mulWithOverflow(board, magic_rook_v[@intCast(x + 4 * y)])[0] >> 58 });
 
                 atk_map = 0;
 
                 if (board & one << @intCast(x + y * 8) == 0) {
                     const y_change = [_]i32{ 1, -1 };
-
-                    //std.debug.print("{} - {} ----------------\n", .{ x, y });
-                    //display_u64(board);
-                    //std.debug.print("\n\n\n", .{});
 
                     for (y_change) |yc| {
                         var y2 = y + yc;
@@ -834,9 +767,6 @@ fn generate_rook_attacks() void {
                             atk_map |= one << @intCast(x + y2 * 8);
                         }
                     }
-
-                    //display_u64(atk_map);
-                    //std.debug.print("\n\n\n", .{});
 
                     for (0..20) |k| {
                         if (atk_map_rook_v[@intCast(x + y * 4)][k] == atk_map) {
