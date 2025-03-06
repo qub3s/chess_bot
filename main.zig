@@ -25,23 +25,6 @@ const Error = error{
     ErrorLogic,
 };
 
-fn vis_board(board: *logic.Board_s) void {
-    const screenWidth = 1000;
-    const screenHeight = 1000;
-    const tile_size = 125;
-
-    vis.ray.InitWindow(screenWidth, screenHeight, "");
-    defer vis.ray.CloseWindow();
-    vis.load_piece_textures() catch return;
-    vis.ray.SetTargetFPS(30);
-
-    while (!vis.ray.WindowShouldClose()) {
-        vis.ray.BeginDrawing();
-        defer vis.ray.EndDrawing();
-        vis.visualize(board, tile_size) catch return;
-    }
-}
-
 fn vis_board_bb(board: *bb.bitboard) void {
     const screenWidth = 1000;
     const screenHeight = 1000;
@@ -59,24 +42,6 @@ fn vis_board_bb(board: *bb.bitboard) void {
     }
 }
 
-fn v_play_hvh() !void {
-    var s = static.static_analysis.init();
-
-    var board = logic.Board_s.init();
-
-    const thread = try std.Thread.spawn(.{}, vis_board, .{&board});
-
-    print("{}\n", .{vis.vis_thread});
-    while (!vis.vis_thread) {
-        const res = (try play.eval_position_move_pv(&board, &s, 1));
-
-        print("{}\n", .{res});
-    }
-
-    thread.join();
-    print("{}\n", .{try board.get_result()});
-}
-
 fn v_play_hvh_bb() !void {
     var board = bb.bitboard.init();
     const thread = try std.Thread.spawn(.{}, vis_board_bb, .{&board});
@@ -88,9 +53,9 @@ fn v_play_eve() !void {
     play.add_rand = true;
     var s = static.static_analysis.init();
 
-    var board = logic.Board_s.init();
+    var board = bb.bitboard.init();
 
-    const thread = try std.Thread.spawn(.{}, vis_board, .{&board});
+    const thread = try std.Thread.spawn(.{}, vis_board_bb, .{&board});
 
     print("{}\n", .{vis.vis_thread});
     while (!vis.vis_thread) {
@@ -107,19 +72,11 @@ pub fn main() !void {
     print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
 
-    //var t: u64 = 342589439504;
-
-    //bb.display_u64(t);
-    //std.debug.print("\n\n\n", .{});
-    //t = bb.inverse_horizontal_u64(t);
-    //bb.display_u64(t);
-    //std.debug.print("\n\n\n", .{});
-    //t = bb.inverse_horizontal_u64(t);
-    //bb.display_u64(t);
-
     bb.generate_attackmaps();
 
-    try v_play_hvh_bb();
+    try v_play_eve();
+
+    //try v_play_hvh_bb();
 
     //var x = bb.bitboard.init();
     //x.display();

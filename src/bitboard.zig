@@ -42,14 +42,32 @@ pub var search_table_bishop_lhrl: [16][64]u4 = undefined;
 // 3: search table lookup
 // 4: attack map lookup
 
-//pub var bishop_masks_dl: [16]u64 = std.mem.zeroes([16]u64);
-//pub var bishop_masks_dr: [16]u64 = std.mem.zeroes([16]u64);
-
 pub const bitboard = struct {
     // black       - white
     // k q r b k p - K Q R B K P
     board: [12]u64,
     white_to_move: bool,
+
+    pub fn to_num_board(self: bitboard, arr: *f32[64]) f32[64] {
+        const one: u64 = 1;
+        var all: u64 = 0;
+
+        for (0..12) |i| {
+            all |= self.board[i];
+        }
+
+        for (0..63) |i| {
+            if (all & (one << i) == 0) {
+                arr = 0;
+            } else {
+                for (0..12) |j| {
+                    if (self.board[j] & (one << i) == 0) {
+                        arr = @floatFromInt(j);
+                    }
+                }
+            }
+        }
+    }
 
     pub fn init() bitboard {
         var board = std.mem.zeroes([12]u64);
