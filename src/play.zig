@@ -39,17 +39,30 @@ fn nega_max_static_pv(board: *bb.bitboard, model: *static.static_analysis, level
     return max;
 }
 
-fn static_eval_pv(board: *bb.bitboard, model: *static.static_analysis) !f32 {
+pub fn static_eval_pv(board: *bb.bitboard, model: *static.static_analysis) !f32 {
     var rnd = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var rand = rnd.random();
 
     var res = std.mem.zeroes([64]i32);
+    res = board.to_num_board(&res);
 
-    if (board.white_to_move) {
-        @memcpy(&res, &board.pieces);
-    } else {
-        board.inverse_board(&res);
+    if (!board.white_to_move) {
+        for (0..64) |i| {
+            if (res[i] != 0 and res[i] <= 7) {
+                res[i] = res[i] + 6;
+            } else if (res[i] != 0 and res[i] > 7) {
+                res[i] = res[i] - 6;
+            }
+        }
     }
+
+    //for (0..64) |i| {
+    //    if (i % 8 == 0 and i != 0) {
+    //        std.debug.print("\n", .{});
+    //    }
+    //    std.debug.print("{}   ", .{res[i]});
+    //}
+    //std.debug.print("\n\n\n", .{});
 
     analyzed_positions += 1;
     if (add_rand) {
@@ -88,7 +101,7 @@ pub fn play_best_move_pv(board: *bb.bitboard, model: *static.static_analysis, le
         }
     }
 
-    board.make_move_m(moves.items[@intCast(indx)]);
+    board.* = (moves.items[@intCast(indx)]);
     //std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
     analyzed_positions = 0;
     return max;

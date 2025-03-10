@@ -25,7 +25,7 @@ const Error = error{
     ErrorLogic,
 };
 
-fn vis_board_bb(board: *bb.bitboard) void {
+fn vis_board_bb(board: *bb.bitboard, s: *static.static_analysis) void {
     const screenWidth = 1000;
     const screenHeight = 1000;
     const tile_size = 125;
@@ -39,12 +39,15 @@ fn vis_board_bb(board: *bb.bitboard) void {
         vis.ray.BeginDrawing();
         defer vis.ray.EndDrawing();
         vis.visualize_bb(board, tile_size) catch return;
+        std.debug.print("{}\n", .{try play.static_eval_pv(board, s)});
     }
 }
 
 fn v_play_hvh_bb() !void {
     var board = bb.bitboard.init();
-    const thread = try std.Thread.spawn(.{}, vis_board_bb, .{&board});
+    var s = static.static_analysis.init();
+
+    const thread = try std.Thread.spawn(.{}, vis_board_bb, .{ &board, &s });
     print("{}\n", .{vis.vis_thread});
     thread.join();
 }
@@ -55,7 +58,7 @@ fn v_play_eve() !void {
 
     var board = bb.bitboard.init();
 
-    const thread = try std.Thread.spawn(.{}, vis_board_bb, .{&board});
+    const thread = try std.Thread.spawn(.{}, vis_board_bb, .{ &board, &s });
 
     print("{}\n", .{vis.vis_thread});
     while (!vis.vis_thread) {
@@ -65,7 +68,7 @@ fn v_play_eve() !void {
     }
 
     thread.join();
-    print("{}\n", .{try board.get_result()});
+    //print("{}\n", .{try board.get_result()});
 }
 
 pub fn main() !void {

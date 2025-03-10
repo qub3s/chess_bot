@@ -48,7 +48,7 @@ pub const bitboard = struct {
     board: [12]u64,
     white_to_move: bool,
 
-    pub fn to_num_board(self: bitboard, arr: *f32[64]) f32[64] {
+    pub fn to_num_board(self: bitboard, arr: *[64]i32) [64]i32 {
         const one: u64 = 1;
         var all: u64 = 0;
 
@@ -56,17 +56,20 @@ pub const bitboard = struct {
             all |= self.board[i];
         }
 
-        for (0..63) |i| {
-            if (all & (one << i) == 0) {
-                arr = 0;
+        for (0..64) |i| {
+            if (all & (one << @intCast(i)) == 0) {
+                arr[i] = 0;
             } else {
                 for (0..12) |j| {
-                    if (self.board[j] & (one << i) == 0) {
-                        arr = @floatFromInt(j);
+                    if (self.board[j] & (one << @intCast(i)) != 0) {
+                        arr[i] = @intCast(j + 1);
+                        break;
                     }
                 }
             }
         }
+
+        return arr.*;
     }
 
     pub fn init() bitboard {
@@ -103,6 +106,14 @@ pub const bitboard = struct {
             tmp = self.board[i];
             self.board[i] = self.board[i + 6];
             self.board[i + 6] = tmp;
+        }
+    }
+
+    pub fn over(self: *bitboard) void {
+        if (self.board[0] != 0 or self.board[6] != 0) {
+            return true;
+        } else {
+            return false;
         }
     }
 
@@ -207,8 +218,7 @@ pub const bitboard = struct {
         }
 
         if (!self.white_to_move) {
-            const tmp: u64 = 0;
-            own_pieces = tmp;
+            const tmp: u64 = own_pieces;
             own_pieces = other_pieces;
             other_pieces = tmp;
         }
