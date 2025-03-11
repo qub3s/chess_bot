@@ -8,6 +8,6 @@ wenn white_to_move = False:
     - negative werte bedeuten dass weiß besser ist
 
 
-Vor Optimization:
-    - 760K auf PC
+Vor Optimization: <br>
+    - 760K auf PC <br>
 
