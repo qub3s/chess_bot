@@ -9,7 +9,7 @@ var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = general_purpose_allocator.allocator();
 
 pub var add_rand = false;
-var analyzed_positions: u32 = 0;
+pub var analyzed_positions: u32 = 0;
 
 fn nega_max_static_pv(board: *bb.bitboard, model: *static.static_analysis, level: u32, alpha: f32, beta: f32) !f32 {
     if (level == 0) {
@@ -46,14 +46,11 @@ pub fn static_eval_pv(board: *bb.bitboard, model: *static.static_analysis) !f32 
     var res = std.mem.zeroes([64]i32);
     res = board.to_num_board(&res);
 
-    if (!board.white_to_move) {
-        for (0..64) |i| {
-            if (res[i] != 0 and res[i] <= 7) {
-                res[i] = res[i] + 6;
-            } else if (res[i] != 0 and res[i] > 7) {
-                res[i] = res[i] - 6;
-            }
-        }
+    var ret: f32 = 0;
+    if (add_rand) {
+        ret = model.eval_pv(res) + rand.float(f32) * 0.0001;
+    } else {
+        ret = model.eval_pv(res);
     }
 
     //for (0..64) |i| {
@@ -65,10 +62,11 @@ pub fn static_eval_pv(board: *bb.bitboard, model: *static.static_analysis) !f32 
     //std.debug.print("\n\n\n", .{});
 
     analyzed_positions += 1;
-    if (add_rand) {
-        return model.eval_pv(res) + rand.float(f32) * 0.0001;
+
+    if (board.white_to_move) {
+        return ret;
     } else {
-        return model.eval_pv(res);
+        return -ret;
     }
 }
 
@@ -102,7 +100,7 @@ pub fn play_best_move_pv(board: *bb.bitboard, model: *static.static_analysis, le
     }
 
     board.* = (moves.items[@intCast(indx)]);
-    //std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
+    std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
     analyzed_positions = 0;
     return max;
 }

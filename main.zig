@@ -39,7 +39,8 @@ fn vis_board_bb(board: *bb.bitboard, s: *static.static_analysis) void {
         vis.ray.BeginDrawing();
         defer vis.ray.EndDrawing();
         vis.visualize_bb(board, tile_size) catch return;
-        std.debug.print("{}\n", .{try play.static_eval_pv(board, s)});
+        _ = try play.static_eval_pv(board, s);
+        //std.debug.print("{}\n", .{try play.static_eval_pv(board, s)});
     }
 }
 
@@ -63,7 +64,7 @@ fn v_play_eve() !void {
     print("{}\n", .{vis.vis_thread});
     while (!vis.vis_thread) {
         print("{}\n", .{board.white_to_move});
-        const res = (try play.play_best_move_pv(&board, &s, 4));
+        const res = (try play.play_best_move_pv(&board, &s, 6));
         print("{d}\n", .{res});
     }
 
@@ -77,7 +78,9 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    try v_play_eve();
+    try bench.pseudolegal_moves(2);
+
+    //try v_play_eve();
 
     //try v_play_hvh_bb();
 

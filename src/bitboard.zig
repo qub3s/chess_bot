@@ -180,28 +180,29 @@ pub const bitboard = struct {
         return cpy;
     }
 
-    inline fn create_new_bitboards(self: *bitboard, store: *std.ArrayList(bitboard), piece: u32, moves: u64, piece_pos: u64) !void {
-        var pos: u64 = 1;
+    inline fn create_new_bitboards(_: *bitboard, _: *std.ArrayList(bitboard), _: u32, _: u64, _: u64) !void {
+        return;
+        //var pos: u64 = 1;
 
-        for (0..64) |_| {
-            if (pos & moves != 0) {
-                var new_board: [12]u64 = undefined;
+        //for (0..64) |_| {
+        //    if (pos & moves != 0) {
+        //        var new_board: [12]u64 = undefined;
 
-                // copy and remove from original and new position
-                for (0..12) |i| {
-                    if (i == piece) {
-                        new_board[i] = self.board[i] ^ pos ^ piece_pos;
-                    } else {
-                        new_board[i] = self.board[i] ^ (pos & self.board[i]);
-                    }
-                }
+        //        // copy and remove from original and new position
+        //        for (0..12) |i| {
+        //            if (i == piece) {
+        //                new_board[i] = self.board[i] ^ pos ^ piece_pos;
+        //            } else {
+        //                new_board[i] = self.board[i] ^ (pos & self.board[i]);
+        //            }
+        //        }
 
-                new_board[piece] |= pos;
+        //        new_board[piece] |= pos;
 
-                try store.append(bitboard{ .board = new_board, .white_to_move = !self.white_to_move });
-            }
-            pos = pos << 1;
-        }
+        //        try store.append(bitboard{ .board = new_board, .white_to_move = !self.white_to_move });
+        //    }
+        //    pos = pos << 1;
+        //}
     }
 
     pub fn gen_moves(self: *bitboard, store: *std.ArrayList(bitboard)) !void {
