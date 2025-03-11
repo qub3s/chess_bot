@@ -78,7 +78,7 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    try bench.pseudolegal_moves(2);
+    //try bench.pseudolegal_moves(2);
 
     //try v_play_eve();
 

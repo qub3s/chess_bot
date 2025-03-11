@@ -3,14 +3,14 @@ const std = @import("std");
 var general_purpose_allocator = std.heap.GeneralPurposeAllocautor(.{}){};
 const gpa = general_purpose_allocator.allocator();
 
-pub var knight_moves: [64]u64 = undefined;
-pub var king_moves: [64]u64 = undefined;
+pub var knight_moves: [64][8]i7 = undefined;
+pub var king_moves: [64][8]i7 = undefined;
 
-pub var pawn_attacks_white: [64]u64 = undefined;
-pub var pawn_moves_white: [64]u64 = undefined;
+pub var pawn_attacks_white: [64][8]i7 = undefined;
+pub var pawn_moves_white: [64][8]i7 = undefined;
 
-pub var pawn_attacks_black: [64]u64 = undefined;
-pub var pawn_moves_black: [64]u64 = undefined;
+pub var pawn_attacks_black: [64][8]i7 = undefined;
+pub var pawn_moves_black: [64][8]i7 = undefined;
 
 pub var rook_masks_v: [16]u64 = undefined;
 pub var rook_masks_h: [16]u64 = undefined;
@@ -180,29 +180,28 @@ pub const bitboard = struct {
         return cpy;
     }
 
-    inline fn create_new_bitboards(_: *bitboard, _: *std.ArrayList(bitboard), _: u32, _: u64, _: u64) !void {
-        return;
-        //var pos: u64 = 1;
+    inline fn create_new_bitboards(self: *bitboard, store: *std.ArrayList(bitboard), piece: u32, moves: u64, piece_pos: u64) !void {
+        var pos: u64 = 1;
 
-        //for (0..64) |_| {
-        //    if (pos & moves != 0) {
-        //        var new_board: [12]u64 = undefined;
+        for (0..64) |_| {
+            if (pos & moves != 0) {
+                var new_board: [12]u64 = undefined;
 
-        //        // copy and remove from original and new position
-        //        for (0..12) |i| {
-        //            if (i == piece) {
-        //                new_board[i] = self.board[i] ^ pos ^ piece_pos;
-        //            } else {
-        //                new_board[i] = self.board[i] ^ (pos & self.board[i]);
-        //            }
-        //        }
+                // copy and remove from original and new position
+                for (0..12) |i| {
+                    if (i == piece) {
+                        new_board[i] = self.board[i] ^ pos ^ piece_pos;
+                    } else {
+                        new_board[i] = self.board[i] ^ (pos & self.board[i]);
+                    }
+                }
 
-        //        new_board[piece] |= pos;
+                new_board[piece] |= pos;
 
-        //        try store.append(bitboard{ .board = new_board, .white_to_move = !self.white_to_move });
-        //    }
-        //    pos = pos << 1;
-        //}
+                try store.append(bitboard{ .board = new_board, .white_to_move = !self.white_to_move });
+            }
+            pos = pos << 1;
+        }
     }
 
     pub fn gen_moves(self: *bitboard, store: *std.ArrayList(bitboard)) !void {
@@ -235,18 +234,18 @@ pub const bitboard = struct {
                 for (0..12) |j| {
                     if (self.board[j] & pos != 0) {
                         switch (j) {
-                            0 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            //0 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
                             1 => try self.create_new_bitboards(store, 1, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
                             2 => try self.create_new_bitboards(store, 2, gen_rooks(all_pieces, own_pieces, i), pos),
                             3 => try self.create_new_bitboards(store, 3, gen_bishops(all_pieces, own_pieces, i), pos),
-                            4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+                            //4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             5 => try self.create_new_bitboards(store, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
 
-                            6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            //6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
                             7 => try self.create_new_bitboards(store, 7, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
                             8 => try self.create_new_bitboards(store, 8, gen_rooks(all_pieces, own_pieces, i), pos),
                             9 => try self.create_new_bitboards(store, 9, gen_bishops(all_pieces, own_pieces, i), pos),
-                            10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+                            //10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
                             11 => try self.create_new_bitboards(store, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
                             else => {},
                         }
@@ -256,6 +255,10 @@ pub const bitboard = struct {
             pos = pos << 1;
         }
     }
+
+    //fn gen_king(bo: u64, own_pieces: u64, square: usize) u64 {
+    //fn gen_knight(bo: u64, own_pieces: u64, square: usize) u64 {
+    //fn gen_pawn(bo: u64, own_pieces: u64, square: usize) u64 {
 
     fn gen_rooks(bo: u64, own_pieces: u64, square: usize) u64 {
         var board: u64 = bo;
@@ -353,9 +356,8 @@ pub fn generate_attackmaps() void {
 }
 
 fn generate_pawn_attacks() void {
-    const one: u64 = 1;
-
     for (0..64) |i| {
+        var ind: usize = 0;
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -367,12 +369,18 @@ fn generate_pawn_attacks() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_attacks_black[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_attacks_black[i][ind] = @intCast(x2 + y2 * 8);
+                ind += 1;
             }
+        }
+
+        for (ind..8) |j| {
+            king_moves[i][j] = -1;
         }
     }
 
     for (0..64) |i| {
+        var ind: usize = 0;
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -384,16 +392,20 @@ fn generate_pawn_attacks() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_attacks_white[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_attacks_white[i][ind] = @intCast(x2 + y2 * 8);
+                ind += 1;
             }
+        }
+
+        for (ind..8) |j| {
+            king_moves[i][j] = -1;
         }
     }
 }
 
 fn generate_pawn_moves() void {
-    const one: u64 = 1;
-
     for (0..64) |i| {
+        var ind: usize = 0;
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -405,12 +417,18 @@ fn generate_pawn_moves() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_moves_black[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_moves_black[i][ind] = @intCast(x2 + y2 * 8);
+                ind += 1;
             }
+        }
+
+        for (ind..8) |j| {
+            king_moves[i][j] = -1;
         }
     }
 
     for (0..64) |i| {
+        var ind: usize = 0;
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -422,16 +440,20 @@ fn generate_pawn_moves() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                pawn_moves_white[i] |= one << @intCast(x2 + y2 * 8);
+                pawn_moves_white[i][ind] = @intCast(x2 + y2 * 8);
+                ind += 1;
             }
+        }
+
+        for (ind..8) |j| {
+            king_moves[i][j] = -1;
         }
     }
 }
 
 fn generate_king_moves() void {
-    const one: u64 = 1;
-
     for (0..64) |i| {
+        var ind: usize = 0;
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -443,16 +465,20 @@ fn generate_king_moves() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                king_moves[i] |= one << @intCast(x2 + y2 * 8);
+                king_moves[i][ind] = @intCast(x2 + y2 * 8);
+                ind += 1;
             }
+        }
+
+        for (ind..8) |j| {
+            king_moves[i][j] = -1;
         }
     }
 }
 
 fn generate_knight_moves() void {
-    const one: u64 = 1;
-
     for (0..64) |i| {
+        var ind: usize = 0;
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -464,8 +490,13 @@ fn generate_knight_moves() void {
             const y2 = y + yc;
 
             if (x2 >= 0 and x2 < 8 and y2 >= 0 and y2 < 8) {
-                knight_moves[i] |= one << @intCast(x2 + y2 * 8);
+                knight_moves[i][ind] = @intCast(x2 + y2 * 8);
+                ind += 1;
             }
+        }
+
+        for (ind..8) |j| {
+            knight_moves[i][j] = -1;
         }
     }
 }
