@@ -3,14 +3,14 @@ const std = @import("std");
 var general_purpose_allocator = std.heap.GeneralPurposeAllocautor(.{}){};
 const gpa = general_purpose_allocator.allocator();
 
-pub var knight_moves: [64][8]i7 = undefined;
-pub var king_moves: [64][8]i7 = undefined;
+pub var knight_moves: [64][8]i8 = undefined;
+pub var king_moves: [64][8]i8 = undefined;
 
-pub var pawn_attacks_white: [64][8]i7 = undefined;
-pub var pawn_moves_white: [64][8]i7 = undefined;
+pub var pawn_attacks_white: [64][8]i8 = undefined;
+pub var pawn_moves_white: [64][8]i8 = undefined;
 
-pub var pawn_attacks_black: [64][8]i7 = undefined;
-pub var pawn_moves_black: [64][8]i7 = undefined;
+pub var pawn_attacks_black: [64][8]i8 = undefined;
+pub var pawn_moves_black: [64][8]i8 = undefined;
 
 pub var rook_masks_v: [16]u64 = undefined;
 pub var rook_masks_h: [16]u64 = undefined;
@@ -18,8 +18,8 @@ pub var rook_masks_h: [16]u64 = undefined;
 pub var magic_rook_v: [16]u64 = undefined;
 pub var magic_rook_h: [16]u64 = undefined;
 
-pub var atk_map_rook_v: [16][20]u64 = undefined;
-pub var atk_map_rook_h: [16][20]u64 = undefined;
+pub var atk_map_rook_v: [16][20]u64 = undefined; //
+pub var atk_map_rook_h: [16][20]u64 = undefined; //
 
 pub var search_table_rook_v: [16][64]u4 = undefined;
 pub var search_table_rook_h: [16][64]u4 = undefined;
@@ -31,8 +31,8 @@ pub var bishop_masks_lhrl: [16]u64 = undefined;
 pub var magic_bishop_llrh: [16]u64 = undefined;
 pub var magic_bishop_lhrl: [16]u64 = undefined;
 
-pub var atk_map_bishop_llrh: [16][20]u64 = undefined;
-pub var atk_map_bishop_lhrl: [16][20]u64 = undefined;
+pub var atk_map_bishop_llrh: [16][20]u64 = undefined; //
+pub var atk_map_bishop_lhrl: [16][20]u64 = undefined; //
 
 pub var search_table_bishop_llrh: [16][64]u4 = undefined;
 pub var search_table_bishop_lhrl: [16][64]u4 = undefined;
@@ -753,6 +753,8 @@ fn generate_rook_attacks() void {
     var atk_map: u64 = undefined;
 
     for (0..32) |i| {
+        var store: [12]u64 = std.mem.zeroes([12]u64);
+
         const x: i32 = @mod(@as(i32, @intCast(i)), 8);
         const y: i32 = @divTrunc(@as(i32, @intCast(i)), 8);
 
@@ -781,15 +783,16 @@ fn generate_rook_attacks() void {
                     }
 
                     for (0..12) |k| {
-                        if (atk_map_rook_h[@intCast(x + y * 4)][k] == atk_map) {
-                            search_table_rook_h[@intCast(x + y * 4)][j] = @intCast(k);
+                        if (store[k] == atk_map) {
                             break;
                         }
 
-                        if (atk_map_rook_h[@intCast(x + y * 4)][k] == 0) {
+                        if (store[k] == 0) {
+                            store[k] = @intCast(k);
                             search_table_rook_h[@intCast(x + y * 4)][j] = @intCast(k);
-                            atk_map_rook_h[@intCast(x + y * 4)][k] = atk_map;
 
+                            // add the values to attack map
+                            //atk_map_rook_h[@intCast(x + y * 4)][k] = atk_map;
                             break;
                         }
                     }
