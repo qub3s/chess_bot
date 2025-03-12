@@ -19,12 +19,12 @@ fn nega_max_static_pv(board: *bb.bitboard, model: *static.static_analysis, level
     var max = alpha;
     var val: f32 = undefined;
 
-    var moves = std.ArrayList(bb.bitboard).init(gpa);
-    defer moves.deinit();
-    try board.gen_moves(&moves);
+    var moves: [256]bb.bitboard = undefined;
+    var number_of_moves: usize = 0;
+    try board.gen_moves(&moves, &number_of_moves);
 
-    for (0..moves.items.len) |i| {
-        var move_to_eval = moves.items[i];
+    for (0..number_of_moves) |i| {
+        var move_to_eval = moves[i];
 
         val = -1 * (try nega_max_static_pv(&move_to_eval, model, level - 1, -beta, -max));
 
@@ -71,25 +71,26 @@ pub fn static_eval_pv(board: *bb.bitboard, model: *static.static_analysis) !f32 
 }
 
 pub fn play_best_move_pv(board: *bb.bitboard, model: *static.static_analysis, level: u32) !f32 {
-    var moves = std.ArrayList(bb.bitboard).init(gpa);
-    defer moves.deinit();
-    try board.gen_moves(&moves);
+    var moves: [256]bb.bitboard = undefined;
+    var number_of_moves: usize = 0;
+
+    try board.gen_moves(&moves, &number_of_moves);
 
     var max = -std.math.inf(f32);
     var indx: i32 = 0;
 
-    if (moves.items.len == 0) {
+    if (number_of_moves == 0) {
         std.debug.print("game over!\n", .{});
         return 0;
     }
 
-    for (0..moves.items.len) |i| {
+    for (0..number_of_moves) |i| {
         var val: f32 = 0;
-        var move_to_eval = moves.items[i];
+        var move_to_eval = moves[i];
 
-        var pos_moves = std.ArrayList(bb.bitboard).init(gpa);
-        defer pos_moves.deinit();
-        try board.gen_moves(&pos_moves);
+        var moves_2: [256]bb.bitboard = undefined;
+        var number_of_moves_2: usize = 0;
+        try board.gen_moves(&moves_2, &number_of_moves_2);
 
         val = -1 * (try nega_max_static_pv(&move_to_eval, model, level - 1, -std.math.inf(f32), std.math.inf(f32)));
 
@@ -99,7 +100,7 @@ pub fn play_best_move_pv(board: *bb.bitboard, model: *static.static_analysis, le
         }
     }
 
-    board.* = (moves.items[@intCast(indx)]);
+    board.* = (moves[@intCast(indx)]);
     std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
     analyzed_positions = 0;
     return max;

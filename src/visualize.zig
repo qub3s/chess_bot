@@ -48,8 +48,9 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
     }
 
     //var visible_moves = std.ArrayList(bb.bitboard).init(gpa);
-    var all_moves = std.ArrayList(bb.bitboard).init(gpa);
-    try board.gen_moves(&all_moves);
+    var all_moves: [256]bb.bitboard = undefined;
+    var number_of_moves: usize = 0;
+    try board.gen_moves(&all_moves, &number_of_moves);
 
     //std.debug.print("{}\n", .{all_moves.items.len});
 
@@ -61,8 +62,8 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
             var temp: i32 = -1;
             const new_gamestate = board.make_hypothetical_moves(@intCast(last_click_pos.v), @intCast(click_pos));
 
-            for (0..all_moves.items.len) |i| {
-                if (all_moves.items[i].equal(new_gamestate)) {
+            for (0..number_of_moves + 1) |i| {
+                if (all_moves[i].equal(new_gamestate)) {
                     temp = click_pos;
                     break;
                 }

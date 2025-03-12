@@ -64,7 +64,7 @@ fn v_play_eve() !void {
     print("{}\n", .{vis.vis_thread});
     while (!vis.vis_thread) {
         print("{}\n", .{board.white_to_move});
-        const res = (try play.play_best_move_pv(&board, &s, 6));
+        const res = (try play.play_best_move_pv(&board, &s, 4));
         print("{d}\n", .{res});
     }
 
@@ -78,7 +78,7 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    try bench.pseudolegal_moves(2);
+    try bench.pseudolegal_moves(1000000);
 
     //try v_play_eve();
 

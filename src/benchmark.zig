@@ -9,22 +9,29 @@ const gpa = general_purpose_allocator.allocator();
 
 // pseudolegal move generation -> target larger than a million a second
 
-pub fn pseudolegal_moves(sec: i64) !void {
+pub fn pseudolegal_moves(iterations: u64) !void {
     std.debug.print("\nStart Benchmarking Pseudolegal Move Generation ... \n", .{});
 
     var board = bb.bitboard.init();
 
-    const start: i64 = std.time.milliTimestamp();
+    const start: i128 = std.time.nanoTimestamp();
 
-    var nps: i64 = 1;
+    for (0..iterations) |_| {
+        var moves: [256]bb.bitboard = undefined;
+        var number_of_moves: usize = 0;
 
-    while (std.time.milliTimestamp() < start + sec * 1000) {
-        var list = try std.ArrayList(bb.bitboard).initCapacity(gpa, 100);
-        try board.gen_moves(&list);
-        nps += 1;
+        try board.gen_moves(&moves, &number_of_moves);
+
+        if (number_of_moves == 0) {
+            board = bb.bitboard.init();
+        } else {
+            board = moves[0];
+        }
     }
 
-    std.debug.print("Nodes per Second: {d}\n", .{@divTrunc(nps, sec)});
+    const factor: f64 = @as(f64, 1000000000) / @as(f64, @floatFromInt(std.time.nanoTimestamp() - start));
+
+    std.debug.print("Mega Nodes per Second: {d} (Mnps) \n", .{@as(f64, @floatFromInt(iterations)) * factor / 1000000});
 }
 
-// move analysis
+//pub fn move_generation_plus_pv(iterations: u64) !void {}

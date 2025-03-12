@@ -11,7 +11,7 @@ pub const static_analysis = struct {
     pub fn init() static_analysis {
         const piece_square_tables = std.mem.zeroes([768]f32);
         const gradient = std.mem.zeroes([768]f32);
-        const piece_values = .{ 100000, 9, 5, 3, 3, 1 };
+        const piece_values = .{ 100000, 10, 5.25, 3.5, 3.5, 1 };
 
         return static_analysis{ .piece_square_tables = piece_square_tables, .gradient = gradient, .gradient_values = 0, .piece_values = piece_values };
     }

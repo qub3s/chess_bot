@@ -122,6 +122,7 @@ pub const bitboard = struct {
         var printed: bool = false;
 
         var tmp: u64 = 0x8000000000000000;
+
         for (0..64) |pos| {
             if (pos != 0 and pos % 8 == 0) {
                 std.debug.print("\n", .{});
@@ -180,32 +181,36 @@ pub const bitboard = struct {
         return cpy;
     }
 
-    inline fn create_new_bitboards(_: *bitboard, _: *std.ArrayList(bitboard), _: u32, _: u64, _: u64) !void {
-        return;
-        //var pos: u64 = 1;
+    inline fn create_new_bitboards(self: *bitboard, store: *[256](bitboard), num_store: *u64, piece: u32, moves: u64, piece_pos: u64) !void {
+        //inline fn create_new_bitboards(_: *bitboard, _: *[256](bitboard), x: *u64, _: u32, _: u64, _: u64) !void {
+        //x.* += 1;
 
-        //for (0..64) |_| {
-        //    if (pos & moves != 0) {
-        //        var new_board: [12]u64 = undefined;
+        var pos: u64 = 1;
 
-        //        // copy and remove from original and new position
-        //        for (0..12) |i| {
-        //            if (i == piece) {
-        //                new_board[i] = self.board[i] ^ pos ^ piece_pos;
-        //            } else {
-        //                new_board[i] = self.board[i] ^ (pos & self.board[i]);
-        //            }
-        //        }
+        for (0..64) |_| {
+            if (pos & moves != 0) {
+                var new_board: [12]u64 = undefined;
 
-        //        new_board[piece] |= pos;
+                // copy and remove from original and new position
+                for (0..12) |i| {
+                    if (i == piece) {
+                        new_board[i] = self.board[i] ^ pos ^ piece_pos;
+                    } else {
+                        new_board[i] = self.board[i] ^ (pos & self.board[i]);
+                    }
+                }
 
-        //        try store.append(bitboard{ .board = new_board, .white_to_move = !self.white_to_move });
-        //    }
-        //    pos = pos << 1;
-        //}
+                new_board[piece] |= pos;
+
+                store[num_store.*] = bitboard{ .board = new_board, .white_to_move = !self.white_to_move };
+
+                num_store.* += 1;
+            }
+            pos = pos << 1;
+        }
     }
 
-    pub fn gen_moves(self: *bitboard, store: *std.ArrayList(bitboard)) !void {
+    pub fn gen_moves(self: *bitboard, store_moves: *[256]bitboard, num_store_moves: *u64) !void {
         var all_pieces: u64 = 0;
         var own_pieces: u64 = 0;
         var other_pieces: u64 = 0;
@@ -227,7 +232,6 @@ pub const bitboard = struct {
         all_pieces = own_pieces | other_pieces;
 
         var pos: u64 = 1;
-        // over all tiles
         for (0..64) |i| {
             if (own_pieces & pos != 0) {
                 // if tile non empty check what piece
@@ -235,19 +239,20 @@ pub const bitboard = struct {
                 for (0..12) |j| {
                     if (self.board[j] & pos != 0) {
                         switch (j) {
-                            0 => try self.create_new_bitboards(store, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
-                            1 => try self.create_new_bitboards(store, 1, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
-                            2 => try self.create_new_bitboards(store, 2, gen_rooks(all_pieces, own_pieces, i), pos),
-                            3 => try self.create_new_bitboards(store, 3, gen_bishops(all_pieces, own_pieces, i), pos),
-                            4 => try self.create_new_bitboards(store, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
-                            5 => try self.create_new_bitboards(store, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
+                            0 => try self.create_new_bitboards(store_moves, num_store_moves, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            1 => try self.create_new_bitboards(store_moves, num_store_moves, 1, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
+                            2 => try self.create_new_bitboards(store_moves, num_store_moves, 2, gen_rooks(all_pieces, own_pieces, i), pos),
+                            3 => try self.create_new_bitboards(store_moves, num_store_moves, 3, gen_bishops(all_pieces, own_pieces, i), pos),
+                            4 => try self.create_new_bitboards(store_moves, num_store_moves, 4, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+                            5 => try self.create_new_bitboards(store_moves, num_store_moves, 5, (pawn_attacks_white[i] & other_pieces) | (pawn_moves_white[i] ^ (pawn_moves_white[i] & all_pieces)), pos),
 
-                            6 => try self.create_new_bitboards(store, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
-                            7 => try self.create_new_bitboards(store, 7, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
-                            8 => try self.create_new_bitboards(store, 8, gen_rooks(all_pieces, own_pieces, i), pos),
-                            9 => try self.create_new_bitboards(store, 9, gen_bishops(all_pieces, own_pieces, i), pos),
-                            10 => try self.create_new_bitboards(store, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
-                            11 => try self.create_new_bitboards(store, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
+                            6 => try self.create_new_bitboards(store_moves, num_store_moves, 6, king_moves[i] ^ (king_moves[i] & own_pieces), pos),
+                            7 => try self.create_new_bitboards(store_moves, num_store_moves, 7, gen_bishops(all_pieces, own_pieces, i) | gen_rooks(all_pieces, own_pieces, i), pos),
+                            8 => try self.create_new_bitboards(store_moves, num_store_moves, 8, gen_rooks(all_pieces, own_pieces, i), pos),
+                            9 => try self.create_new_bitboards(store_moves, num_store_moves, 9, gen_bishops(all_pieces, own_pieces, i), pos),
+                            10 => try self.create_new_bitboards(store_moves, num_store_moves, 10, knight_moves[i] ^ (knight_moves[i] & own_pieces), pos),
+                            11 => try self.create_new_bitboards(store_moves, num_store_moves, 11, (pawn_attacks_black[i] & other_pieces) | (pawn_moves_black[i] ^ (pawn_moves_black[i] & all_pieces)), pos),
+
                             else => {},
                         }
                     }
