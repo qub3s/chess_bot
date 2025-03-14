@@ -182,31 +182,23 @@ pub const bitboard = struct {
     }
 
     inline fn create_new_bitboards(self: *bitboard, store: *[256](bitboard), num_store: *u64, piece: u32, moves: u64, piece_pos: u64) !void {
-        //inline fn create_new_bitboards(_: *bitboard, _: *[256](bitboard), x: *u64, _: u32, _: u64, _: u64) !void {
-        //x.* += 1;
+        var m = moves;
 
-        var pos: u64 = 1;
+        while (m != 0) {
+            const pos = m & (m ^ m - 1);
+            m &= (m - 1);
 
-        for (0..64) |_| {
-            if (pos & moves != 0) {
-                var new_board: [12]u64 = undefined;
+            var new_board: [12]u64 = undefined;
 
-                // copy and remove from original and new position
-                for (0..12) |i| {
-                    if (i == piece) {
-                        new_board[i] = self.board[i] ^ pos ^ piece_pos;
-                    } else {
-                        new_board[i] = self.board[i] ^ (pos & self.board[i]);
-                    }
-                }
-
-                new_board[piece] |= pos;
-
-                store[num_store.*] = bitboard{ .board = new_board, .white_to_move = !self.white_to_move };
-
-                num_store.* += 1;
+            const rem = pos | piece_pos;
+            for (0..12) |i| {
+                new_board[i] = self.board[i] ^ (rem & self.board[i]);
             }
-            pos = pos << 1;
+
+            new_board[piece] |= pos;
+
+            store[num_store.*] = bitboard{ .board = new_board, .white_to_move = !self.white_to_move };
+            num_store.* += 1;
         }
     }
 
@@ -215,18 +207,17 @@ pub const bitboard = struct {
         var own_pieces: u64 = 0;
         var other_pieces: u64 = 0;
 
-        for (0..6) |i| {
-            own_pieces |= self.board[i];
-        }
+        var b1: usize = 0;
+        var b2: usize = 6;
 
-        for (6..12) |i| {
-            other_pieces |= self.board[i];
-        }
-
-        if (!self.white_to_move) {
-            const tmp: u64 = own_pieces;
-            own_pieces = other_pieces;
-            other_pieces = tmp;
+        if (self.white_to_move) {
+            own_pieces = self.board[0] | self.board[1] | self.board[2] | self.board[3] | self.board[4] | self.board[5];
+            other_pieces = self.board[6] | self.board[7] | self.board[7] | self.board[9] | self.board[10] | self.board[11];
+        } else {
+            other_pieces = self.board[0] | self.board[1] | self.board[2] | self.board[3] | self.board[4] | self.board[5];
+            own_pieces = self.board[6] | self.board[7] | self.board[7] | self.board[9] | self.board[10] | self.board[11];
+            b1 = 6;
+            b2 = 12;
         }
 
         all_pieces = own_pieces | other_pieces;
@@ -234,9 +225,7 @@ pub const bitboard = struct {
         var pos: u64 = 1;
         for (0..64) |i| {
             if (own_pieces & pos != 0) {
-                // if tile non empty check what piece
-                // TODO only for the own piece intervall
-                for (0..12) |j| {
+                for (b1..b2) |j| {
                     if (self.board[j] & pos != 0) {
                         switch (j) {
                             0 => try self.create_new_bitboards(store_moves, num_store_moves, 0, king_moves[i] ^ (king_moves[i] & own_pieces), pos),

@@ -78,20 +78,18 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    //try bench.pseudolegal_moves(1000000);
+    try bench.pseudolegal_moves(50000000);
 
-    var u: u64 = 578493;
+    //var u: u64 = 578493;
 
-    bb.display_u64(u);
-    std.debug.print("\n\n", .{});
-    bb.display_u64(u & (u ^ u - 1));
+    //while (u != 0) {
+    //    bb.display_u64(u);
+    //    std.debug.print("\n\n", .{});
+    //    bb.display_u64(u & (u ^ u - 1));
+    //    std.debug.print("\n\n", .{});
 
-    u ^= u ^ u - 1;
-    std.debug.print("\n\n", .{});
-    bb.display_u64(u);
-
-    std.debug.print("\n\n", .{});
-    bb.display_u64(u & (u ^ u - 1));
+    //    u ^= u & (u ^ u - 1);
+    //}
 
     //try v_play_eve();
     //try v_play_hvh_bb();
