@@ -64,7 +64,7 @@ fn v_play_eve() !void {
     print("{}\n", .{vis.vis_thread});
     while (!vis.vis_thread) {
         print("{}\n", .{board.white_to_move});
-        const res = (try play.play_best_move_pv(&board, &s, 4));
+        const res = (try play.play_best_move_pv(&board, &s, 6));
         print("{d}\n", .{res});
     }
 
@@ -78,7 +78,9 @@ pub fn main() !void {
 
     bb.generate_attackmaps();
 
-    try bench.pseudolegal_moves(50000000);
+    //try bench.pseudolegal_moves(50000000);
+    try v_play_hvh_bb();
+    //try v_play_eve();
 
     //var u: u64 = 578493;
 
@@ -91,7 +93,6 @@ pub fn main() !void {
     //    u ^= u & (u ^ u - 1);
     //}
 
-    //try v_play_eve();
     //try v_play_hvh_bb();
 
     //var x = bb.bitboard.init();
