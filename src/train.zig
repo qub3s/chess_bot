@@ -1,16 +1,16 @@
 const std = @import("std");
-const logic = @import("logic.zig");
 const nn = @import("nn.zig");
 const thread_list = @import("Thread_ArrayList.zig");
 const tpool = @import("thread_pool.zig");
 const static = @import("static_eval.zig");
+const bb = @import("bb.zig");
 
 const mem = std.mem;
 
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = general_purpose_allocator.allocator();
 
-const board_evaluation = struct { board: logic.Board_s, value: f32 };
+const board_evaluation = struct { board: bb.bitboard, value: f32 };
 
 pub const train_network = struct {
     train_data: thread_list.Thread_ArrayList(board_evaluation),

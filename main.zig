@@ -1,10 +1,9 @@
 const std = @import("std");
 const mem = @import("std").mem;
 const nn = @import("src/nn.zig");
-const logic = @import("src/logic.zig");
 const vis = @import("src/visualize.zig");
 const tpool = @import("src/thread_pool.zig");
-const train = @import("src/train.zig");
+//const train = @import("src/train.zig");
 const static = @import("src/static_eval.zig");
 const play = @import("src/play.zig");
 const bench = @import("src/benchmark.zig");
@@ -64,7 +63,7 @@ fn v_play_eve() !void {
     print("{}\n", .{vis.vis_thread});
     while (!vis.vis_thread) {
         print("{}\n", .{board.white_to_move});
-        const res = (try play.play_best_move_pv(&board, &s, 6));
+        const res = (try play.play_best_move_pv(&board, &s, 5));
         print("{d}\n", .{res});
     }
 
@@ -79,8 +78,9 @@ pub fn main() !void {
     bb.generate_attackmaps();
 
     //try bench.pseudolegal_moves(50000000);
-    try v_play_hvh_bb();
-    //try v_play_eve();
+    //try bench.pv_eval(10000000);
+    //try v_play_hvh_bb();
+    try v_play_eve();
 
     //var u: u64 = 578493;
 

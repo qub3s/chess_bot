@@ -51,7 +51,7 @@ pub const bitboard = struct {
     castle_right_black: bool,
     castle_right_white: bool,
 
-    pub fn to_num_board(self: bitboard, arr: *[64]i32) [64]i32 {
+    pub fn to_num_board(self: bitboard, arr: *[64]i32) void {
         const one: u64 = 1;
         var all: u64 = 0;
 
@@ -71,8 +71,6 @@ pub const bitboard = struct {
                 }
             }
         }
-
-        return arr.*;
     }
 
     pub fn init() bitboard {
@@ -373,7 +371,7 @@ pub const bitboard = struct {
         return dp | (pawn_attacks_black[square] & other_pieces) | (pawn_moves_black[square] ^ (pawn_moves_black[square] & all_pieces));
     }
 
-    fn gen_rooks(bo: u64, own_pieces: u64, square: usize) u64 {
+    inline fn gen_rooks(bo: u64, own_pieces: u64, square: usize) u64 {
         var board: u64 = bo;
         var x = square % 8;
         var y = square / 8;
@@ -408,7 +406,7 @@ pub const bitboard = struct {
         return board;
     }
 
-    fn gen_bishops(bo: u64, own_pieces: u64, square: usize) u64 {
+    inline fn gen_bishops(bo: u64, own_pieces: u64, square: usize) u64 {
         var board: u64 = bo;
         var x = square % 8;
         var y = square / 8;

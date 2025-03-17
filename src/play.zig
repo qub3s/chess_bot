@@ -1,5 +1,4 @@
 const std = @import("std");
-const logic = @import("logic.zig");
 const nn = @import("nn.zig");
 const thread_list = @import("Thread_ArrayList.zig");
 const static = @import("static_eval.zig");
@@ -44,7 +43,7 @@ pub fn static_eval_pv(board: *bb.bitboard, model: *static.static_analysis) !f32 
     var rand = rnd.random();
 
     var res = std.mem.zeroes([64]i32);
-    res = board.to_num_board(&res);
+    board.to_num_board(&res);
 
     var ret: f32 = 0;
     if (add_rand) {
@@ -104,9 +103,4 @@ pub fn play_best_move_pv(board: *bb.bitboard, model: *static.static_analysis, le
     std.debug.print("Analyzed Positions: {}\n", .{analyzed_positions});
     analyzed_positions = 0;
     return max;
-}
-
-pub fn eval_position_move_pv(board: *logic.Board_s, model: *static.static_analysis, level: u32) !f32 {
-    var cpy = board.copy();
-    return play_best_move_pv(&cpy, model, level);
 }
