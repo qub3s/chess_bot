@@ -236,13 +236,13 @@ pub const bitboard = struct {
 
                 switch (i) {
                     0 => try self.create_new_bitboards(store_moves, num_store_moves, 0, gen_king_white(self, store_moves, num_store_moves, square, own_pieces, all_pieces), pos),
-                    1 => try self.create_new_bitboards(store_moves, num_store_moves, 1, gen_bishops(all_pieces, own_pieces, square) | gen_rooks(all_pieces, own_pieces, i), pos),
+                    1 => try self.create_new_bitboards(store_moves, num_store_moves, 1, gen_bishops(all_pieces, own_pieces, square) | gen_rooks(all_pieces, own_pieces, square), pos),
                     2 => try self.create_new_bitboards(store_moves, num_store_moves, 2, gen_rooks(all_pieces, own_pieces, square), pos),
                     3 => try self.create_new_bitboards(store_moves, num_store_moves, 3, gen_bishops(all_pieces, own_pieces, square), pos),
                     4 => try self.create_new_bitboards(store_moves, num_store_moves, 4, knight_moves[square] ^ (knight_moves[square] & own_pieces), pos),
                     5 => try self.create_new_bitboards(store_moves, num_store_moves, 5, gen_pawn_white(self, square, other_pieces, all_pieces), pos),
 
-                    6 => try self.create_new_bitboards(store_moves, num_store_moves, 6, king_moves[square] ^ (king_moves[square] & own_pieces), pos),
+                    6 => try self.create_new_bitboards(store_moves, num_store_moves, 6, gen_king_black(self, store_moves, num_store_moves, square, own_pieces, all_pieces), pos),
                     7 => try self.create_new_bitboards(store_moves, num_store_moves, 7, gen_bishops(all_pieces, own_pieces, square) | gen_rooks(all_pieces, own_pieces, square), pos),
                     8 => try self.create_new_bitboards(store_moves, num_store_moves, 8, gen_rooks(all_pieces, own_pieces, square), pos),
                     9 => try self.create_new_bitboards(store_moves, num_store_moves, 9, gen_bishops(all_pieces, own_pieces, square), pos),
@@ -289,6 +289,56 @@ pub const bitboard = struct {
                     for (3..12) |i| {
                         new_board[i] = self.board[i];
                     }
+
+                    store[num_store.*] = bitboard{ .board = new_board, .white_to_move = !self.white_to_move, .castle_right_white = self.castle_right_white, .castle_right_black = self.castle_right_black };
+                    num_store.* += 1;
+                }
+            }
+        }
+
+        return king_moves[square] ^ (king_moves[square] & own_pieces);
+    }
+
+    inline fn gen_king_black(self: *bitboard, store: *[256](bitboard), num_store: *u64, square: u64, own_pieces: u64, all_pieces: u64) u64 {
+        const one: u64 = 1;
+        const right_mask: u64 = 0x600000000000000;
+        const left_mask: u64 = 0x7000000000000000;
+
+        if (self.castle_right_black) {
+            if (self.board[6] != one << 59 or self.board[8] & one << 56 == 0 or self.board[8] & one << 63 == 0) {
+                self.castle_right_white = false;
+            } else {
+                if (right_mask & all_pieces == 0) {
+                    var new_board: [12]u64 = undefined;
+
+                    for (0..6) |i| {
+                        new_board[i] = self.board[i];
+                    }
+
+                    new_board[6] = self.board[6] ^ one << 59 ^ one << 57;
+                    new_board[7] = self.board[7];
+                    new_board[8] = self.board[8] ^ one << 56 ^ one << 58;
+                    new_board[9] = self.board[9];
+                    new_board[10] = self.board[10];
+                    new_board[11] = self.board[11];
+
+                    store[num_store.*] = bitboard{ .board = new_board, .white_to_move = !self.white_to_move, .castle_right_white = self.castle_right_white, .castle_right_black = self.castle_right_black };
+                    num_store.* += 1;
+                }
+
+                if (left_mask & all_pieces == 0) {
+                    var new_board: [12]u64 = undefined;
+
+                    for (0..6) |i| {
+                        new_board[i] = self.board[i];
+                    }
+
+                    new_board[6] = self.board[6] ^ one << 59 ^ one << 61;
+                    new_board[7] = self.board[7];
+                    new_board[8] = self.board[8] ^ one << 63 ^ one << 60;
+                    new_board[9] = self.board[9];
+                    new_board[10] = self.board[10];
+                    new_board[11] = self.board[11];
 
                     store[num_store.*] = bitboard{ .board = new_board, .white_to_move = !self.white_to_move, .castle_right_white = self.castle_right_white, .castle_right_black = self.castle_right_black };
                     num_store.* += 1;

@@ -64,8 +64,24 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
 
             for (0..number_of_moves + 1) |i| {
                 if (all_moves[i].equal(new_gamestate)) {
+                    board.* = all_moves[i];
                     temp = click_pos;
                     break;
+                }
+            }
+
+            const one: u64 = 1;
+
+            // left castle
+            if (board.get_square_value(@intCast(last_click_pos.v)) == 0 or board.get_square_value(@intCast(last_click_pos.v)) == 6 and (click_pos == last_click_pos.v - 2 or click_pos == last_click_pos.v + 2)) {
+                std.debug.print("{} - {}\n", .{ click_pos, last_click_pos.v });
+                std.debug.print("{}\n", .{board.get_square_value(@intCast(last_click_pos.v))});
+                for (0..number_of_moves + 1) |i| {
+                    if (all_moves[i].board[0] == one << @intCast(click_pos) or all_moves[i].board[6] == one << @intCast(click_pos)) {
+                        board.* = all_moves[i];
+                        temp = click_pos;
+                        break;
+                    }
                 }
             }
 
@@ -76,7 +92,6 @@ pub fn visualize_bb(board: *bb.bitboard, size: i32) !void {
 
             // swap board pieces
             if (click_pos != -1) {
-                board.* = board.make_hypothetical_moves(@intCast(last_click_pos.v), @intCast(click_pos));
                 last_click_pos.v = -1;
                 click_pos = -1;
             }
