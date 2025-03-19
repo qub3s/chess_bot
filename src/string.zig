@@ -183,11 +183,4 @@ pub fn main() !void {
     for (results.items) |x| {
         std.debug.print("{}\n", .{x});
     }
-
-    std.debug.print("split list:\n", .{});
-
-    for (list.items) |x| {
-        std.debug.print("String: ", .{});
-        x.pln();
-    }
 }
