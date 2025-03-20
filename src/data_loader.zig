@@ -1,5 +1,6 @@
 const std = @import("std");
 const string = @import("string.zig");
+const bb = @import("bitboard.zig");
 
 var general_purpose_alloc = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = general_purpose_alloc.allocator();
@@ -29,8 +30,112 @@ const gpa = general_purpose_alloc.allocator();
 //    }
 //    return result;
 //}
+pub fn fen_to_bb(bytes: []u8) void {
+    const one: u64 = 1;
+    var this_char: u8 = undefined;
+    var offset: u32 = 0;
+    var board = std.mem.zeroes([12]u64);
 
-pub fn fen_to_bb() void {}
+    for (0..bytes.len) |i| {
+        this_char = bytes[i];
+
+        switch (this_char) {
+            '1' => {
+                offset += 1;
+            },
+            '2' => {
+                offset += 2;
+            },
+            '3' => {
+                offset += 3;
+            },
+            '4' => {
+                offset += 4;
+            },
+            '5' => {
+                offset += 5;
+            },
+            '6' => {
+                offset += 6;
+            },
+            '7' => {
+                offset += 7;
+            },
+            '8' => {
+                offset += 8;
+            },
+
+            'p' => {
+                board[5] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'n' => {
+                board[4] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'b' => {
+                board[3] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'r' => {
+                board[2] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'q' => {
+                board[1] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'k' => {
+                board[0] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'P' => {
+                board[11] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'N' => {
+                board[10] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'B' => {
+                board[9] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'R' => {
+                board[8] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'Q' => {
+                board[7] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            'K' => {
+                board[6] |= one << @intCast(63 - offset);
+                offset += 1;
+            },
+
+            else => {},
+        }
+
+        if (this_char == ' ') {
+            break;
+        }
+    }
+
+    const b = bb.bitboard{ .board = board, .white_to_move = true, .castle_right_white = true, .castle_right_black = true };
+    b.display();
+}
 
 pub fn parse_games(path: []const u8, number_positions: usize) !void {
     string.String.String_alloc = gpa;
@@ -61,6 +166,8 @@ pub fn parse_games(path: []const u8, number_positions: usize) !void {
 
         std.debug.print("{s}\n", .{line.items[quotes.items[2] + 1 .. quotes.items[3]]});
         std.debug.print("{s}\n", .{line.items[quotes.items[9] + 2 .. quotes.items[10] - 1]});
+
+        fen_to_bb(line.items[quotes.items[2] + 1 .. quotes.items[3]]);
     }
 }
 
