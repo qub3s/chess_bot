@@ -51,6 +51,28 @@ pub const bitboard = struct {
     castle_right_black: bool,
     castle_right_white: bool,
 
+    pub fn get_768(self: bitboard, board: [768]f32) void {
+        const one: u64 = 1;
+        var all: u64 = 0;
+
+        for (0..12) |i| {
+            all |= self.board[i];
+        }
+
+        for (0..64) |i| {
+            if (all & (one << @intCast(i)) == 0) {
+                board[i] = 0;
+            } else {
+                for (0..12) |j| {
+                    if (self.board[j] & (one << @intCast(i)) != 0) {
+                        board[i + j * 64] = 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn to_num_board(self: bitboard, arr: *[64]i32) void {
         const one: u64 = 1;
         var all: u64 = 0;

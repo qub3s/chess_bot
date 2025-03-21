@@ -30,13 +30,15 @@ const gpa = general_purpose_alloc.allocator();
 //    }
 //    return result;
 //}
-pub fn fen_to_bb(bytes: []u8) void {
+pub fn fen_to_bb(bytes: []u8) bb.bitboard {
     const one: u64 = 1;
     var this_char: u8 = undefined;
+    var pos: usize = 0;
     var offset: u32 = 0;
     var board = std.mem.zeroes([12]u64);
 
     for (0..bytes.len) |i| {
+        pos = i;
         this_char = bytes[i];
 
         switch (this_char) {
@@ -129,12 +131,17 @@ pub fn fen_to_bb(bytes: []u8) void {
         }
 
         if (this_char == ' ') {
-            break;
+            std.debug.print("{c}\n", .{bytes[pos + 1]});
+
+            if (bytes[pos + 1] == 'w') {
+                return bb.bitboard{ .board = board, .white_to_move = true, .castle_right_white = true, .castle_right_black = true };
+            } else {
+                return bb.bitboard{ .board = board, .white_to_move = true, .castle_right_white = true, .castle_right_black = true };
+            }
         }
     }
 
-    const b = bb.bitboard{ .board = board, .white_to_move = true, .castle_right_white = true, .castle_right_black = true };
-    b.display();
+    unreachable;
 }
 
 pub fn parse_games(path: []const u8, number_positions: usize) !void {
@@ -167,11 +174,11 @@ pub fn parse_games(path: []const u8, number_positions: usize) !void {
         std.debug.print("{s}\n", .{line.items[quotes.items[2] + 1 .. quotes.items[3]]});
         std.debug.print("{s}\n", .{line.items[quotes.items[9] + 2 .. quotes.items[10] - 1]});
 
-        fen_to_bb(line.items[quotes.items[2] + 1 .. quotes.items[3]]);
+        _ = fen_to_bb(line.items[quotes.items[2] + 1 .. quotes.items[3]]);
     }
 }
 
 pub fn main() !void {
     std.debug.print("start:\n", .{});
-    try parse_games("/home/qub3/Downloads/lichess_db_eval.jsonl", 30);
+    try parse_games("/home/qub3/downloads/lichess_db_eval.jsonl", 30);
 }
