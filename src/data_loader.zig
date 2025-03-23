@@ -131,12 +131,10 @@ pub fn fen_to_bb(bytes: []u8) bb.bitboard {
         }
 
         if (this_char == ' ') {
-            std.debug.print("{c}\n", .{bytes[pos + 1]});
-
             if (bytes[pos + 1] == 'w') {
                 return bb.bitboard{ .board = board, .white_to_move = true, .castle_right_white = true, .castle_right_black = true };
             } else {
-                return bb.bitboard{ .board = board, .white_to_move = true, .castle_right_white = true, .castle_right_black = true };
+                return bb.bitboard{ .board = board, .white_to_move = false, .castle_right_white = true, .castle_right_black = true };
             }
         }
     }
@@ -144,7 +142,7 @@ pub fn fen_to_bb(bytes: []u8) bb.bitboard {
     unreachable;
 }
 
-pub fn parse_games(path: []const u8, number_positions: usize) !void {
+pub fn parse_games(path: []const u8, number_positions: usize, evals: *std.ArrayList(i32), boards: *std.ArrayList([768]f32)) !void {
     string.String.String_alloc = gpa;
 
     const file = try std.fs.cwd().openFile(path, .{});
@@ -171,14 +169,21 @@ pub fn parse_games(path: []const u8, number_positions: usize) !void {
 
         try s.find(try string.String.init_s("\""), &quotes);
 
-        std.debug.print("{s}\n", .{line.items[quotes.items[2] + 1 .. quotes.items[3]]});
-        std.debug.print("{s}\n", .{line.items[quotes.items[9] + 2 .. quotes.items[10] - 1]});
+        const fen = fen_to_bb(line.items[quotes.items[2] + 1 .. quotes.items[3]]);
 
-        _ = fen_to_bb(line.items[quotes.items[2] + 1 .. quotes.items[3]]);
+        const value = try std.fmt.parseInt(i32, line.items[quotes.items[9] + 2 .. quotes.items[10] - 1], 10);
+
+        var _768 = std.mem.zeroes([768]f32);
+        fen.get_768(&_768);
+
+        try boards.append(_768);
+        try evals.append(value);
     }
 }
 
 pub fn main() !void {
-    std.debug.print("start:\n", .{});
-    try parse_games("/home/qub3/downloads/lichess_db_eval.jsonl", 30);
+    var board = std.ArrayList([768]f32).init(gpa);
+    var evals = std.ArrayList(i32).init(gpa);
+
+    try parse_games("/home/qub3/downloads/lichess_db_eval.jsonl", 5, &evals, &board);
 }

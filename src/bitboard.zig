@@ -51,7 +51,7 @@ pub const bitboard = struct {
     castle_right_black: bool,
     castle_right_white: bool,
 
-    pub fn get_768(self: bitboard, board: [768]f32) void {
+    pub fn get_768(self: bitboard, board: *[768]f32) void {
         const one: u64 = 1;
         var all: u64 = 0;
 

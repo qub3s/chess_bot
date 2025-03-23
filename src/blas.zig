@@ -1,6 +1,6 @@
 const std = @import("std");
 //const blas = @cImport(@cInclude("flexiblas/cblas.h"));
-const mvmultc = @cImport(@cInclude("vm_mul.h"));
+const mvmultc = @cImport(@cInclude("c_src/simd/vm_mul.h"));
 
 const print = std.debug.print;
 

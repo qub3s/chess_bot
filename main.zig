@@ -8,6 +8,8 @@ const static = @import("src/static_eval.zig");
 const play = @import("src/play.zig");
 const bench = @import("src/benchmark.zig");
 const bb = @import("src/bitboard.zig");
+const train = @import("src/train.zig");
+const dl = @import("src/data_loader.zig");
 
 pub const ray = @cImport({
     @cInclude("raylib.h");
@@ -72,15 +74,25 @@ fn v_play_eve() !void {
 }
 
 pub fn main() !void {
-    print("compiles...\n", .{});
     ray.SetTraceLogLevel(5);
 
-    bb.generate_attackmaps();
+    const net = try train.create_random_net(32);
 
-    //try bench.pseudolegal_moves(50000000);
-    //try bench.pv_eval(10000000);
-    //try v_play_hvh_bb();
-    try v_play_eve();
+    var board = std.ArrayList([768]f32).init(gpa);
+    var evals = std.ArrayList(i32).init(gpa);
+
+    try dl.parse_games("/home/qub3/downloads/lichess_db_eval.jsonl", 10, &evals, &board);
+
+    try train.train_network(net, 0.01, 100000, 5, &board, &evals);
+
+    print("compiles...\n", .{});
+
+    //bb.generate_attackmaps();
+
+    ////try bench.pseudolegal_moves(50000000);
+    ////try bench.pv_eval(10000000);
+    ////try v_play_hvh_bb();
+    //try v_play_eve();
 
     //var u: u64 = 578493;
 
