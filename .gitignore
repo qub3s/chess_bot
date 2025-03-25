@@ -3,6 +3,8 @@
 !*.*
 !*/
 
+*.jsonl
+*.zst
 *.o
 *.pgn
 *.png
